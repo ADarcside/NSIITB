@@ -1,0 +1,54 @@
+# Dependencies
+node_modules/
+env-*/
+venv/
+.venv/
+
+# Build and dist outputs
+dist/
+build/
+*.egg-info/
+viewer/public/dev/
+viewer/public/scn_*/
+
+# Rule 10: Forbidden Git artifacts (large media, runs, temp data, databases)
+*.mp4
+*.mov
+*.avi
+*.mkv
+frames/
+*.ply
+*.spz
+runs/
+*.db
+*.sqlite
+*.sqlite3
+
+# Environment variables & secrets (Rule 10)
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Python cache & compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Test & coverage
+coverage/
+.nyc_output/
+
+# Logs & temp files
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Operating system artifacts
+.DS_Store
+Thumbs.db
+desktop.ini
+site/

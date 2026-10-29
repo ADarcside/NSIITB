@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "nav_id": "nav_23j7x72k3w3c",
+  "transform_scene": "scn_23j7x56k3y7a",
+  "cell_m": 0.05,
+  "origin": [-2.5, -3.0],
+  "width": 100,
+  "height": 120,
+  "agent_radius_m": 0.25,
+  "free_bits_b64": "////AAAA////AAAA////AAAA////AAAA"
+}

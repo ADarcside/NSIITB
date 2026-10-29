@@ -1,0 +1,230 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://nammaspace.org/schemas/manifest.schema.json",
+  "title": "SceneManifest",
+  "description": "Viewer entry point manifest listing scene assets, hashes, camera bounds, and coordinate transform.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "scene_id",
+    "space_id",
+    "version",
+    "created_at",
+    "job_id",
+    "assets",
+    "asset_table",
+    "transform",
+    "start_pose",
+    "eye_height_m",
+    "bounds"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "scene_id": {
+      "type": "string",
+      "pattern": "^scn_[a-z2-7]{12}$"
+    },
+    "space_id": {
+      "type": "string",
+      "pattern": "^spc_[a-z2-7]{12}$"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "job_id": {
+      "type": "string",
+      "pattern": "^job_[a-z2-7]{12}$"
+    },
+    "assets": {
+      "type": "object",
+      "required": [
+        "full"
+      ],
+      "properties": {
+        "full": {
+          "type": "string",
+          "pattern": "^ast_[a-z2-7]{12}$"
+        },
+        "lite": {
+          "type": "string",
+          "pattern": "^ast_[a-z2-7]{12}$"
+        },
+        "grid": {
+          "type": "string",
+          "pattern": "^ast_[a-z2-7]{12}$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "asset_table": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^(spc|flr|rom|cap|job|ast|scn|poi|nav)_[a-z2-7]{12}$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "schema_version",
+          "asset_id",
+          "kind",
+          "format",
+          "uri",
+          "sha256",
+          "bytes"
+        ],
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "const": 1
+          },
+          "asset_id": {
+            "type": "string",
+            "pattern": "^ast_[a-z2-7]{12}$"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "splat_full",
+              "splat_lite",
+              "grid",
+              "video",
+              "report"
+            ]
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "spz",
+              "ply",
+              "json",
+              "mp4"
+            ]
+          },
+          "uri": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "gaussians": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "transform": {
+      "type": "object",
+      "required": [
+        "world_from_splat",
+        "scale",
+        "method",
+        "residuals"
+      ],
+      "properties": {
+        "world_from_splat": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 16,
+          "maxItems": 16
+        },
+        "scale": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "method": {
+          "type": "string",
+          "const": "floor_ransac+tape_pair"
+        },
+        "residuals": {
+          "type": "object",
+          "required": [
+            "floor_rms_m",
+            "scale_check_error_pct"
+          ],
+          "properties": {
+            "floor_rms_m": {
+              "type": "number",
+              "minimum": 0
+            },
+            "scale_check_error_pct": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "start_pose": {
+      "type": "object",
+      "required": [
+        "x",
+        "z",
+        "yaw_deg"
+      ],
+      "properties": {
+        "x": {
+          "type": "number"
+        },
+        "z": {
+          "type": "number"
+        },
+        "yaw_deg": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false
+    },
+    "eye_height_m": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "bounds": {
+      "type": "object",
+      "required": [
+        "minX",
+        "maxX",
+        "minZ",
+        "maxZ"
+      ],
+      "properties": {
+        "minX": {
+          "type": "number"
+        },
+        "maxX": {
+          "type": "number"
+        },
+        "minZ": {
+          "type": "number"
+        },
+        "maxZ": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
