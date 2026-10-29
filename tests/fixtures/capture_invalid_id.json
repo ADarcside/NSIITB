@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "capture_id": "cap_0123456789ab",
+  "space_name": "Living Room 101",
+  "device_model": "iPhone 15 Pro",
+  "os_version": "iOS 18.0.1",
+  "resolution": {
+    "w": 1920,
+    "h": 1080
+  },
+  "fps": 30.0,
+  "captured_at": "2026-10-17T14:30:00Z",
+  "operator": "Team Namma Space",
+  "sop_version": "v1.0.0",
+  "lighting": "Uniform indoor diffuse",
+  "scale_pairs": [
+    {
+      "a": "mark_1",
+      "b": "mark_2",
+      "distance_m": 2.0,
+      "role": "scale"
+    }
+  ],
+  "consent": {
+    "granted": true,
+    "reference": "consent-ref-2026"
+  }
+}

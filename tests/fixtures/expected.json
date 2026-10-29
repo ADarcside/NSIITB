@@ -1,0 +1,114 @@
+[
+  {
+    "fixture": "capture_valid.json",
+    "contract": "Capture",
+    "expected_valid": true,
+    "check_layer": null,
+    "description": "Fully compliant capture metadata with valid RFC 4648 base32 IDs"
+  },
+  {
+    "fixture": "capture_invalid_version.json",
+    "contract": "Capture",
+    "expected_valid": false,
+    "check_layer": "schema",
+    "description": "Capture with invalid schema_version (expected 1, got 2)"
+  },
+  {
+    "fixture": "capture_invalid_id.json",
+    "contract": "Capture",
+    "expected_valid": false,
+    "check_layer": "schema",
+    "description": "Capture with capture_id containing characters 0, 1, 8, 9 (outside RFC 4648 base32 [a-z2-7])"
+  },
+  {
+    "fixture": "capture_invalid_missing_fields.json",
+    "contract": "Capture",
+    "expected_valid": false,
+    "check_layer": "schema",
+    "description": "Capture payload missing mandatory fields (consent, scale_pairs, resolution, etc.)"
+  },
+  {
+    "fixture": "manifest_valid.json",
+    "contract": "SceneManifest",
+    "expected_valid": true,
+    "check_layer": null,
+    "description": "Fully compliant scene manifest with full/lite/grid assets, 16-element transform matrix, and start_pose within bounds"
+  },
+  {
+    "fixture": "manifest_invalid_assets.json",
+    "contract": "SceneManifest",
+    "expected_valid": false,
+    "check_layer": "semantic",
+    "description": "SceneManifest referencing full asset not present in asset_table (cross-field reference failure)"
+  },
+  {
+    "fixture": "manifest_invalid_missing_lite_asset.json",
+    "contract": "SceneManifest",
+    "expected_valid": false,
+    "check_layer": "semantic",
+    "description": "SceneManifest referencing lite asset not present in asset_table (cross-field reference failure)"
+  },
+  {
+    "fixture": "manifest_invalid_transform.json",
+    "contract": "SceneManifest",
+    "expected_valid": false,
+    "check_layer": "schema",
+    "description": "SceneManifest with world_from_splat matrix length != 16 (has 9 elements)"
+  },
+  {
+    "fixture": "manifest_invalid_bounds.json",
+    "contract": "SceneManifest",
+    "expected_valid": false,
+    "check_layer": "semantic",
+    "description": "SceneManifest with inverted bounds (minX > maxX)"
+  },
+  {
+    "fixture": "manifest_invalid_sha256.json",
+    "contract": "SceneManifest",
+    "expected_valid": false,
+    "check_layer": "schema",
+    "description": "SceneManifest with asset having non-hex or non-64-char sha256 checksum"
+  },
+  {
+    "fixture": "manifest_invalid_asset_kind.json",
+    "contract": "SceneManifest",
+    "expected_valid": false,
+    "check_layer": "schema",
+    "description": "SceneManifest with asset kind not matching enum ['splat_full', 'splat_lite', 'grid', 'video', 'report']"
+  },
+  {
+    "fixture": "manifest_invalid_start_pose_bounds.json",
+    "contract": "SceneManifest",
+    "expected_valid": false,
+    "check_layer": "semantic",
+    "description": "SceneManifest with start_pose (x=10.0) outside room bounds [minX: -2.0, maxX: 2.0]"
+  },
+  {
+    "fixture": "navgrid_valid.json",
+    "contract": "NavGrid",
+    "expected_valid": true,
+    "check_layer": null,
+    "description": "Fully compliant 2D binary occupancy NavGrid with valid base64 payload and 2D origin"
+  },
+  {
+    "fixture": "navgrid_invalid_base64.json",
+    "contract": "NavGrid",
+    "expected_valid": false,
+    "check_layer": "schema",
+    "description": "NavGrid with non-base64 characters in free_bits_b64"
+  },
+  {
+    "fixture": "navgrid_invalid_origin.json",
+    "contract": "NavGrid",
+    "expected_valid": false,
+    "check_layer": "schema",
+    "description": "NavGrid with origin array dimension != 2 (has 1 element)"
+  },
+  {
+    "fixture": "manifest_valid_null_scale_check.json",
+    "contract": "SceneManifest",
+    "expected_valid": true,
+    "check_layer": null,
+    "description": "Fully compliant scene manifest with null scale_check_error_pct when camera-height prior is used"
+  }
+]

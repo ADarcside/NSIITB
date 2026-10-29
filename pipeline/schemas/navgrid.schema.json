@@ -1,0 +1,90 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://nammaspace.org/schemas/navgrid.schema.json",
+  "title": "NavGrid",
+  "description": "2D binary occupancy navigation grid for collision testing and walkable area representation, with optional height layers for flying/crouching.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "nav_id",
+    "transform_scene",
+    "cell_m",
+    "origin",
+    "width",
+    "height",
+    "agent_radius_m",
+    "free_bits_b64"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "nav_id": {
+      "type": "string",
+      "pattern": "^nav_[a-z2-7]{12}$"
+    },
+    "transform_scene": {
+      "type": "string",
+      "pattern": "^scn_[a-z2-7]{12}$"
+    },
+    "cell_m": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "origin": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "width": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "height": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "agent_radius_m": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "free_bits_b64": {
+      "type": "string",
+      "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
+    },
+    "layers": {
+      "type": "object",
+      "description": "Occupied cells per height slice (not dilated). Bits ordered layer, row, column; MSB first.",
+      "required": [
+        "y0_m",
+        "dy_m",
+        "count",
+        "occupied_bits_b64"
+      ],
+      "properties": {
+        "y0_m": {
+          "type": "number",
+          "minimum": 0
+        },
+        "dy_m": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "occupied_bits_b64": {
+          "type": "string",
+          "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

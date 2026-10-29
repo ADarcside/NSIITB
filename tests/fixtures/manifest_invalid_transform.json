@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "scene_id": "scn_23j7x56k3y7a",
+  "space_id": "spc_23j7x37m5w2a",
+  "version": 1,
+  "created_at": "2026-10-17T15:00:00Z",
+  "job_id": "job_23j7x52k5m2b",
+  "assets": {
+    "full": "ast_23j7x62k4x7c"
+  },
+  "asset_table": {
+    "ast_23j7x62k4x7c": {
+      "schema_version": 1,
+      "asset_id": "ast_23j7x62k4x7c",
+      "kind": "splat_full",
+      "format": "spz",
+      "uri": "https://cdn.nammaspace.org/scenes/v001/splat_full.spz",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 48201948
+    }
+  },
+  "transform": {
+    "world_from_splat": [
+      1.0, 0.0, 0.0,
+      0.0, 1.0, 0.0,
+      0.0, 0.0, 1.0
+    ],
+    "scale": 1.0,
+    "method": "floor_ransac+tape_pair",
+    "residuals": {
+      "floor_rms_m": 0.02,
+      "scale_check_error_pct": 1.0
+    }
+  },
+  "start_pose": {
+    "x": 0.0,
+    "z": 0.0,
+    "yaw_deg": 0.0
+  },
+  "eye_height_m": 1.5,
+  "bounds": {
+    "minX": -2.0,
+    "maxX": 2.0,
+    "minZ": -2.0,
+    "maxZ": 2.0
+  }
+}

@@ -1,0 +1,63 @@
+# Namma Space - Default Reconstruction Pipeline Configuration
+# Hash of this file is recorded in every run_report.json
+
+validate:
+  min_duration_s: 90
+  min_height_px: 1080
+
+frames:
+  candidate_fps: 4
+  blur_factor: 0.6
+  keep_min: 150
+  keep_max: 600
+  keep_target: [200, 400]
+
+colmap:
+  camera_model: SIMPLE_RADIAL
+  mapper: global          # global (COLMAP 4.x global_mapper) or incremental
+  timeout_s: 21600        # per COLMAP command (6 h); only a guard against a hung process
+  matcher: exhaustive
+  min_registered_ratio: 0.95
+  max_reproj_px: 1.0
+  min_largest_component_ratio: 0.8
+
+train:
+  trainer: splatfacto
+  iterations: 30000
+  holdout_every: 8
+  psnr_target_db: 24
+  psnr_gate: warn
+
+normalize:
+  floor_band_fraction: 0.25
+  max_floor_rms_m: 0.03
+  max_scale_error_pct: 2.0
+  min_opacity: 0.05
+  scale_outlier_multiple: 6.0
+  scale_outlier_min_m: 1.0     # only drop a big Gaussian if it is also over this size: plain floors/ceilings use large ones
+  room_dims_warn_pct: 5.0      # warn when wall-to-wall distance disagrees with capture room_dims_m
+  room_box_pad_m: 0.3
+
+compress:
+  spz_version: 3
+  lite_fraction: 0.4
+  max_full_mb: 100
+  max_lite_mb: 30
+
+grid:
+  cell_m: 0.05
+  height_band_m: [0.2, 1.7]
+  n_min: 3
+  agent_radius_m: 0.25
+  occupied_opacity_sum: 6.0   # a 5 cm cell is blocked when its Gaussians' opacities in the height band add up to this
+  min_opacity: 0.2            # fainter Gaussians are ignored for collision
+  min_obstacle_m2: 0.05       # smaller blobs are floaters, not furniture
+  min_free_m2: 1.0            # less walkable area than this = grid not trusted, ghost mode only
+  layers:                     # height slices for flying/crouching (Q/E) over and between furniture
+    y0_m: 0.1
+    dy_m: 0.1
+    top_m: 2.9
+    occupied_opacity_sum: 1.5 # per 10 cm slice of a 5 cm cell
+    min_opacity: 0.2
+    min_obstacle_m2: 0.02
+    tall_min_layers: 4        # solid in 4+ stacked slices (0.4 m) = rod or post: kept even if only a cell wide
