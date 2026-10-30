@@ -89,6 +89,12 @@ npm run dev
 
 Open http://localhost:5173/ . With no `?scene=` the viewer loads the synthetic dev scene.
 
+To open our real reconstructed room instead, copy the sample scene in and add `?scene=`:
+```bash
+mkdir -p public && cp -r ../sample/test-capture/scn_hostelroomac public/
+# open http://localhost:5173/?scene=scn_hostelroomac
+```
+
 Controls: click the canvas to capture the mouse, **WASD** to walk, mouse to look, **Q / E** to fly down and up (eye height 0.7 to 2.7 m), the Reset button to return to the start position. Esc releases the mouse.
 
 When a scene ships a walkable grid (`grid.json`), the viewer starts in **Grid** mode, where walls and furniture are solid. Once you fly with Q / E, collision switches to the height layer you are at, so you can rise over a bunk or crouch through the gap between bunks without passing through them. The Mode button switches to **Ghost** mode, which walks through everything but stays inside the room bounds.
@@ -249,6 +255,7 @@ We host it on GitHub Pages from a separate repository ([ADarcside/namma-space](h
 ```bash
 source ~/ns_env.sh && cd ~/aR
 python -m pytest -q                         # pipeline contracts and stages (synthetic data, no GPU)
+python -m pytest -q tests/pipeline/test_sample_scene.py   # sample K-720 scene matches its manifest
 
 cd viewer
 npm run make:dev-scene                      # needed once after a fresh clone, or 4 viewer tests fail
@@ -268,7 +275,7 @@ On Windows, run the Python parts inside WSL and open the repo from WSL in VS Cod
 | `pipeline/schemas/` | JSON schemas for `capture.json`, `manifest.json` and the navigation grid |
 | `viewer/` | the browser viewer (TypeScript, Three.js, Spark, Vite) |
 | `tests/` | pytest and Vitest suites; `tests/fixtures/` has template JSON files |
-| `sample/test-capture/` | where sample input goes (videos are never committed) |
+| `sample/test-capture/` | sample data: the published K-720 scene (manifest, full and lite SPZ, walkable grid), see its README |
 | `docs/sop.md`, `docs/field-checklist.md` | how to capture |
 | `docs/decisions/` | short records of tool and format decisions |
 | `SPEC.md` | the Round 1 specification and repo rules |
