@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "scene_id": "scn_hostelroomac",
+  "space_id": "spc_hostelroomaa",
+  "version": 1,
+  "created_at": "2026-10-29T08:30:42Z",
+  "job_id": "job_hostelroomac",
+  "assets": {
+    "full": "ast_hostelroomfl",
+    "lite": "ast_hostelroomlt",
+    "grid": "ast_hostelroomgd"
+  },
+  "asset_table": {
+    "ast_hostelroomfl": {
+      "schema_version": 1,
+      "asset_id": "ast_hostelroomfl",
+      "kind": "splat_full",
+      "format": "spz",
+      "uri": "full.spz",
+      "sha256": "13a3b2f89be1ebd156476f1c8bf140375087686a6df188b6a0f728862042e778",
+      "bytes": 45127180,
+      "gaussians": 2005123
+    },
+    "ast_hostelroomlt": {
+      "schema_version": 1,
+      "asset_id": "ast_hostelroomlt",
+      "kind": "splat_lite",
+      "format": "spz",
+      "uri": "lite.spz",
+      "sha256": "e1a8b7d07289bd13f5b010041df833de603e2715bf53901af481a4dbfe996e85",
+      "bytes": 5174880,
+      "gaussians": 240615
+    },
+    "ast_hostelroomgd": {
+      "schema_version": 1,
+      "asset_id": "ast_hostelroomgd",
+      "kind": "grid",
+      "format": "json",
+      "uri": "grid.json",
+      "sha256": "c0b2d2c0d12508df4cb628a7695f5dc9f3968418fb741920251dd372a1cb8f5a",
+      "bytes": 49163
+    }
+  },
+  "transform": {
+    "world_from_splat": [
+      -0.10910115482421125,
+      0.1184615197496882,
+      0.45824982427962646,
+      0.0,
+      0.4678059028602598,
+      -0.04454592701234713,
+      0.12289179278291366,
+      0.0,
+      0.07199771081646583,
+      0.4689473571979009,
+      -0.10408554612425149,
+      0.0,
+      0.01691075432948087,
+      1.427916795608829,
+      0.06291443078219283,
+      1.0
+    ],
+    "scale": 0.48572532886158076,
+    "method": "floor_ransac+tape_pair",
+    "residuals": {
+      "floor_rms_m": 0.004,
+      "scale_check_error_pct": null
+    }
+  },
+  "start_pose": {
+    "x": 0.12,
+    "z": 0.132,
+    "yaw_deg": 0.0
+  },
+  "eye_height_m": 1.5,
+  "bounds": {
+    "minX": -2.905,
+    "maxX": 2.952,
+    "minZ": -1.743,
+    "maxZ": 1.687
+  }
+}

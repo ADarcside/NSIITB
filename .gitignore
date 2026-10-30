@@ -52,3 +52,6 @@ pnpm-debug.log*
 Thumbs.db
 desktop.ini
 site/
+
+# Exception: the published K-720 scene ships as sample data for reviewers
+!sample/test-capture/**/*.spz
