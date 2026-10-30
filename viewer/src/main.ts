@@ -15,7 +15,8 @@ import * as THREE from 'three';
 import { SparkSceneRenderer } from './renderer/spark_adapter.js';
 import { GhostCollisionProvider } from './collision/ghost.js';
 import { GridCollisionProvider } from './collision/grid.js';
-import { FirstPersonMovementController } from './controls/movement.js';
+import { FirstPersonMovementController, BASE_FOV_DEG, type MoveMode } from './controls/movement.js';
+import { Footsteps } from './controls/footsteps.js';
 import { VanillaAppUI } from './ui/app_ui.js';
 import {
   parseSceneParam,
@@ -46,12 +47,44 @@ async function bootstrap() {
   let movementController: FirstPersonMovementController | null = null;
   let adaptQuality: ((fps: number) => void) | null = null;
 
+  // Movement mode: free roam (default, Q/E fly) or walk (fixed height, game feel); ?move=walk starts in walk
+  let moveMode: MoveMode = new URLSearchParams(window.location.search).get('move') === 'walk' ? 'walk' : 'free';
+  const moveLabel = (m: MoveMode) => (m === 'walk' ? 'Walk' : 'Free roam');
+  const footsteps = new Footsteps();
+  const toggleMove = () => {
+    moveMode = moveMode === 'walk' ? 'free' : 'walk';
+    movementController?.setMode(moveMode);
+    ui.setMoveMode(moveLabel(moveMode));
+    ui.setVolumeVisible(moveMode === 'walk');
+  };
+  window.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.ctrlKey || e.altKey || e.metaKey || e.repeat) return;
+    if (e.code === 'KeyF') toggleMove();
+    if (e.code === 'KeyM') {
+      footsteps.toggleMute();
+      ui.setVolume(footsteps.volume, footsteps.muted);
+    }
+    // Space jumps in Walk mode; keep it from scrolling or pressing a focused HUD button
+    if (e.code === 'Space') e.preventDefault();
+  });
+  window.addEventListener('keyup', (e: KeyboardEvent) => {
+    if (e.code === 'Space') e.preventDefault();
+  });
+
   const ui = new VanillaAppUI({
     isDevScene,
     initialMode: 'Ghost',
     onReset: () => {
       movementController?.reset();
     },
+    initialMoveLabel: moveLabel(moveMode),
+    onMoveToggle: toggleMove,
+    initialVolume: footsteps.muted ? 0 : footsteps.volume,
+    onVolumeChange: v => {
+      if (footsteps.muted && v > 0) footsteps.toggleMute();
+      footsteps.setVolume(v);
+    },
+    onVolumeCommit: () => footsteps.play(),
     onModeToggle: () => {
       if (!gridProvider) {
         alert('Grid collision data is not available for this scene. Running in Ghost mode.');
@@ -64,6 +97,8 @@ async function bootstrap() {
     },
   });
 
+  ui.setVolumeVisible(moveMode === 'walk');
+
   try {
     ui.showProgress(0.1);
 
@@ -73,7 +108,7 @@ async function bootstrap() {
 
     // 4. Set up Camera and Renderer
     const camera = new THREE.PerspectiveCamera(
-      60,
+      BASE_FOV_DEG,
       window.innerWidth / window.innerHeight,
       0.01,
       1000
@@ -122,6 +157,9 @@ async function bootstrap() {
       startPose: manifest.start_pose,
       eyeHeightM: manifest.eye_height_m,
       collision: gridProvider ?? ghostProvider,
+      mode: moveMode,
+      onFootstep: sprint => footsteps.play(sprint),
+      onLand: () => footsteps.play(false, true),
     });
     movementController.attachDomListeners(canvas);
 
@@ -264,8 +302,18 @@ async function bootstrap() {
       if (movementController) {
         movementController.update(dt);
         const pose = movementController.pose;
-        camera.position.set(pose.x, pose.y, pose.z);
+        // Walk mode head bob / sway / sprint FOV are camera-only (zero and BASE_FOV_DEG in free roam)
+        const off = movementController.cameraOffset;
+        camera.position.set(
+          pose.x + Math.cos(pose.yaw) * off.side,
+          pose.y + off.y,
+          pose.z - Math.sin(pose.yaw) * off.side
+        );
         camera.rotation.set(pose.pitch, pose.yaw, 0, 'YXZ');
+        if (camera.fov !== off.fov) {
+          camera.fov = off.fov;
+          camera.updateProjectionMatrix();
+        }
       }
 
       renderer.render(camera);

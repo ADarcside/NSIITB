@@ -12,11 +12,16 @@ import {
   WALK_SPEED,
   SPRINT_SPEED,
   MAX_PITCH_RAD,
+  BASE_FOV_DEG,
+  SPRINT_FOV_DEG,
+  JUMP_SPEED,
+  GRAVITY,
+  MAX_EYE_M,
 } from '../../viewer/src/controls/movement.js';
 import { GhostCollisionProvider } from '../../viewer/src/collision/ghost.js';
 import { GridCollisionProvider } from '../../viewer/src/collision/grid.js';
 import type { NavGrid } from '../../viewer/src/contracts/types.js';
-import type { Bounds, Pose3D, Vec2 } from '../../viewer/src/types.js';
+import type { Bounds, CollisionProvider, Pose3D, Vec2 } from '../../viewer/src/types.js';
 
 describe('Movement Step & Wall Sliding', () => {
   const roomBounds: Bounds = { minX: -2.0, maxX: 2.0, minZ: -2.0, maxZ: 2.0 };
@@ -268,5 +273,208 @@ describe('FirstPersonMovementController', () => {
     expect(controller.keys.left).toBe(false);
     expect(controller.keys.right).toBe(false);
     expect(controller.keys.sprint).toBe(false);
+  });
+});
+
+describe('Walk / Free roam modes', () => {
+  const bounds: Bounds = { minX: -3.0, maxX: 3.0, minZ: -3.0, maxZ: 3.0 };
+  const ghostCol = new GhostCollisionProvider(bounds);
+  const make = (mode?: 'free' | 'walk', collision: CollisionProvider = ghostCol) =>
+    new FirstPersonMovementController({ startPose: { x: 0, z: 0, yaw_deg: 30 }, eyeHeightM: 1.5, collision, mode });
+  const run = (c: FirstPersonMovementController, frames: number) => {
+    for (let i = 0; i < frames; i++) c.update(1 / 60);
+  };
+
+  it('free roam (default) matches the original behaviour: W, fly up, sprint-strafe, fly down', () => {
+    const c = make();
+    expect(c.mode).toBe('free');
+    c.handleKeyDown('KeyW');
+    c.handleKeyDown('KeyE');
+    run(c, 40);
+    c.handleKeyUp('KeyE');
+    c.handleKeyDown('ShiftLeft');
+    c.handleKeyDown('KeyD');
+    run(c, 40);
+    c.clearKeys();
+    c.handleKeyDown('KeyQ');
+    run(c, 20);
+    // Golden values recorded from the controller before walk mode was added
+    expect(c.pose.x).toBeCloseTo(0.0223084407386112, 10);
+    expect(c.pose.y).toBeCloseTo(1.7666666666666666, 10);
+    expect(c.pose.z).toBeCloseTo(-2.0970937359793864, 10);
+    expect(c.cameraOffset).toEqual({ y: 0, side: 0, fov: BASE_FOV_DEG });
+  });
+
+  it('walk mode keeps the eye height fixed: E and Q do nothing', () => {
+    const c = make('walk');
+    c.handleKeyDown('KeyE');
+    run(c, 60);
+    expect(c.pose.y).toBe(1.5);
+    c.handleKeyUp('KeyE');
+    c.handleKeyDown('KeyQ');
+    run(c, 60);
+    expect(c.pose.y).toBe(1.5);
+    expect(c.flying).toBe(false);
+  });
+
+  it('switching to walk while flying drops to eye height and stops flying', () => {
+    const c = make('free');
+    c.handleKeyDown('KeyE');
+    run(c, 30);
+    expect(c.flying).toBe(true);
+    c.setMode('walk');
+    expect(c.pose.y).toBe(1.5);
+    expect(c.flying).toBe(false);
+  });
+
+  it('switching to walk over a blocked spot moves to the nearest free spot', () => {
+    // Blocked disc of radius 0.5 m around the origin (like flying above a bunk)
+    const disc: CollisionProvider = {
+      isFree: (x, z) => Math.hypot(x, z) > 0.5,
+      bounds: () => bounds,
+    };
+    const c = make('free', disc);
+    c.setMode('walk');
+    const r = Math.hypot(c.pose.x, c.pose.z);
+    expect(r).toBeGreaterThan(0.5);
+    expect(r).toBeLessThan(0.6);
+  });
+
+  it('head bob runs while walking and settles to zero after stopping', () => {
+    const steps: boolean[] = [];
+    const c = make('walk');
+    c.onFootstep = sprint => steps.push(sprint);
+    c.handleKeyDown('KeyW');
+    run(c, 120);
+    expect(steps.length).toBeGreaterThanOrEqual(2);
+    let maxBob = 0;
+    for (let i = 0; i < 30; i++) {
+      c.update(1 / 60);
+      maxBob = Math.max(maxBob, Math.abs(c.cameraOffset.y));
+    }
+    expect(maxBob).toBeGreaterThan(0.01);
+    c.clearKeys();
+    run(c, 60);
+    expect(Math.abs(c.cameraOffset.y)).toBeLessThan(1e-3);
+    expect(c.pose.y).toBe(1.5);
+  });
+
+  it('sprinting in walk mode widens the FOV, and it returns when walking', () => {
+    const c = make('walk', new GhostCollisionProvider({ minX: -50, maxX: 50, minZ: -50, maxZ: 50 }));
+    c.handleKeyDown('KeyW');
+    c.handleKeyDown('ShiftLeft');
+    run(c, 120);
+    expect(c.cameraOffset.fov).toBeCloseTo(SPRINT_FOV_DEG, 1);
+    c.handleKeyUp('ShiftLeft');
+    run(c, 120);
+    expect(c.cameraOffset.fov).toBe(BASE_FOV_DEG);
+  });
+
+  it('reset keeps walk mode', () => {
+    const c = make('walk');
+    c.reset();
+    expect(c.mode).toBe('walk');
+  });
+});
+
+describe('Walk mode jump', () => {
+  const bounds: Bounds = { minX: -3.0, maxX: 3.0, minZ: -3.0, maxZ: 3.0 };
+  const make = (mode: 'free' | 'walk', eyeHeightM = 1.5) =>
+    new FirstPersonMovementController({
+      startPose: { x: 0, z: 0, yaw_deg: 0 },
+      eyeHeightM,
+      collision: new GhostCollisionProvider(bounds),
+      mode,
+    });
+  const run = (c: FirstPersonMovementController, frames: number) => {
+    for (let i = 0; i < frames; i++) c.update(1 / 60);
+  };
+
+  it('Space jumps up and lands back at eye height', () => {
+    const c = make('walk');
+    let landings = 0;
+    c.onLand = () => landings++;
+    c.handleKeyDown('Space');
+    run(c, 10);
+    expect(c.pose.y).toBeGreaterThan(1.5);
+    expect(c.airborne).toBe(true);
+    run(c, 120);
+    expect(c.pose.y).toBe(1.5);
+    expect(landings).toBe(1);
+  });
+
+  it('peaks at about JUMP_SPEED^2 / 2g', () => {
+    const c = make('walk');
+    c.handleKeyDown('Space');
+    let peak = 0;
+    for (let i = 0; i < 60; i++) {
+      c.update(1 / 60);
+      peak = Math.max(peak, c.pose.y - 1.5);
+    }
+    expect(peak).toBeCloseTo((JUMP_SPEED * JUMP_SPEED) / (2 * GRAVITY), 1);
+  });
+
+  it('holding Space gives one jump; a fresh press jumps again', () => {
+    const c = make('walk');
+    let landings = 0;
+    c.onLand = () => landings++;
+    c.handleKeyDown('Space');
+    run(c, 120);
+    expect(landings).toBe(1);
+    c.handleKeyUp('Space');
+    c.handleKeyDown('Space');
+    run(c, 120);
+    expect(landings).toBe(2);
+  });
+
+  it('free roam ignores Space', () => {
+    const c = make('free');
+    c.handleKeyDown('Space');
+    run(c, 20);
+    expect(c.pose.y).toBe(1.5);
+  });
+
+  it('never rises above MAX_EYE_M under a low ceiling', () => {
+    const c = make('walk', 2.5);
+    c.handleKeyDown('Space');
+    let top = 0;
+    for (let i = 0; i < 120; i++) {
+      c.update(1 / 60);
+      top = Math.max(top, c.pose.y);
+    }
+    expect(top).toBeLessThanOrEqual(MAX_EYE_M + 1e-9);
+    expect(c.pose.y).toBe(2.5);
+  });
+
+  it('reset and mode switches cancel a jump', () => {
+    const c = make('walk');
+    c.handleKeyDown('Space');
+    run(c, 10);
+    c.reset();
+    expect(c.pose.y).toBe(1.5);
+    expect(c.airborne).toBe(false);
+    c.handleKeyUp('Space');
+    c.handleKeyDown('Space');
+    run(c, 10);
+    c.setMode('free');
+    expect(c.airborne).toBe(false);
+  });
+
+  it('no footsteps in the air, and the landing dip eases back to zero', () => {
+    const c = make('walk');
+    let steps = 0;
+    c.onFootstep = () => steps++;
+    c.handleKeyDown('KeyW');
+    c.handleKeyDown('Space');
+    run(c, 3);
+    const before = steps;
+    run(c, 25); // still in the air (about 0.6 s total)
+    expect(c.airborne).toBe(true);
+    expect(steps).toBe(before);
+    c.clearKeys();
+    run(c, 30);
+    expect(c.airborne).toBe(false);
+    run(c, 30);
+    expect(Math.abs(c.cameraOffset.y)).toBeLessThan(1e-3);
   });
 });

@@ -18,6 +18,13 @@ export interface AppUIOptions {
   initialMode?: 'Ghost' | 'Grid';
   onReset?: () => void;
   onModeToggle?: () => void;
+  /** Walk / Free roam switch (F) */
+  onMoveToggle?: () => void;
+  initialMoveLabel?: string;
+  /** Footstep volume slider (Walk mode): value 0..1 while dragging, and on release */
+  initialVolume?: number;
+  onVolumeChange?: (v: number) => void;
+  onVolumeCommit?: () => void;
 }
 
 export class VanillaAppUI implements AppUI {
@@ -33,6 +40,10 @@ export class VanillaAppUI implements AppUI {
   private readonly _fpsBadge: HTMLElement;
   private readonly _modeBadge: HTMLElement;
   private readonly _resetButton: HTMLElement;
+  private readonly _moveButton: HTMLElement;
+  private readonly _volumeBox: HTMLElement;
+  private readonly _volumeIcon: HTMLElement;
+  private readonly _volumeSlider: HTMLInputElement;
 
   private _isHelpVisible = false;
   private _mode: 'Ghost' | 'Grid' = 'Ghost';
@@ -81,6 +92,45 @@ export class VanillaAppUI implements AppUI {
       this._onModeToggle?.();
     });
     topHud.appendChild(this._modeBadge);
+
+    this._moveButton = document.createElement('button');
+    this._moveButton.id = 'move-mode-btn';
+    this._moveButton.className = 'hud-badge mode-badge';
+    this._moveButton.title = 'Switch between Walk (fixed height) and Free roam (fly) (F)';
+    this._moveButton.textContent = `Move: ${options.initialMoveLabel ?? 'Free roam'}`;
+    this._moveButton.addEventListener('click', () => {
+      this._moveButton.blur(); // Space (jump) must not press it again
+      options.onMoveToggle?.();
+    });
+    topHud.appendChild(this._moveButton);
+
+    // Footstep volume (shown in Walk mode only). Keys and clicks on it stay out of the game.
+    this._volumeBox = document.createElement('label');
+    this._volumeBox.id = 'footstep-volume';
+    this._volumeBox.className = 'hud-badge volume-box hidden';
+    this._volumeBox.title = 'Footstep volume (M mutes)';
+    this._volumeIcon = document.createElement('span');
+    this._volumeIcon.className = 'volume-icon';
+    this._volumeSlider = document.createElement('input');
+    this._volumeSlider.type = 'range';
+    this._volumeSlider.min = '0';
+    this._volumeSlider.max = '100';
+    this._volumeSlider.setAttribute('aria-label', 'Footstep volume');
+    this._volumeBox.append(this._volumeIcon, this._volumeSlider);
+    for (const type of ['pointerdown', 'keydown', 'keyup'] as const) {
+      this._volumeSlider.addEventListener(type, e => e.stopPropagation());
+    }
+    this._volumeSlider.addEventListener('input', () => {
+      const v = Number(this._volumeSlider.value) / 100;
+      this._showVolume(v, false);
+      options.onVolumeChange?.(v);
+    });
+    this._volumeSlider.addEventListener('change', () => {
+      this._volumeSlider.blur(); // WASD go back to the game
+      options.onVolumeCommit?.();
+    });
+    this._showVolume(options.initialVolume ?? 0.6, false);
+    topHud.appendChild(this._volumeBox);
 
     this._resetButton = document.createElement('button');
     this._resetButton.id = 'reset-btn';
@@ -156,7 +206,10 @@ export class VanillaAppUI implements AppUI {
         <div class="help-grid">
           <div><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd></div><div>Walk (Forward, Left, Back, Right)</div>
           <div><kbd>Shift</kbd></div><div>Fast Walk (2.5 m/s)</div>
-          <div><kbd>E</kbd> / <kbd>Q</kbd></div><div>Fly up / down (over or between furniture; R walks again)</div>
+          <div><kbd>F</kbd></div><div>Switch Walk (person height, game feel) / Free roam</div>
+          <div><kbd>E</kbd> / <kbd>Q</kbd></div><div>Free roam: fly up / down (over or between furniture; R walks again)</div>
+          <div><kbd>Space</kbd></div><div>Walk: jump</div>
+          <div><kbd>M</kbd></div><div>Walk: footstep sound on / off (slider sets the volume)</div>
           <div><kbd>Mouse</kbd></div><div>Look around (Yaw & Pitch +/-85&deg;)</div>
           <div><kbd>Click</kbd></div><div>Lock mouse cursor to look</div>
           <div><kbd>Esc</kbd></div><div>Release mouse cursor</div>
@@ -187,6 +240,26 @@ export class VanillaAppUI implements AppUI {
   setMode(mode: 'Ghost' | 'Grid'): void {
     this._mode = mode;
     this._modeBadge.textContent = `Mode: ${this._mode}`;
+  }
+
+  setMoveMode(label: string): void {
+    this._moveButton.textContent = `Move: ${label}`;
+  }
+
+  /** Show or hide the footstep volume slider (Walk mode only) */
+  setVolumeVisible(visible: boolean): void {
+    this._volumeBox.classList.toggle('hidden', !visible);
+  }
+
+  /** Update the slider from code; muted shows 0 and the muted icon */
+  setVolume(v: number, muted: boolean): void {
+    this._showVolume(v, muted);
+  }
+
+  private _showVolume(v: number, muted: boolean): void {
+    const shown = muted ? 0 : v;
+    this._volumeSlider.value = String(Math.round(shown * 100));
+    this._volumeIcon.textContent = shown <= 0 ? '\u{1F507}' : '\u{1F509}';
   }
 
   showProgress(p: number): void {
@@ -414,6 +487,24 @@ export class VanillaAppUI implements AppUI {
         font-size: 13px;
         margin-bottom: 20px;
         align-items: center;
+      }
+      .volume-box {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        cursor: pointer;
+      }
+      .volume-icon {
+        font-size: 13px;
+        width: 16px;
+        text-align: center;
+      }
+      .volume-box input[type='range'] {
+        width: 90px;
+        margin: 0;
+        accent-color: #38bdf8;
+        cursor: pointer;
       }
       kbd {
         background: #334155;
