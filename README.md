@@ -1,8 +1,6 @@
 <p align="center">
-  <img src="docs/assets/header-code-repository.svg" alt="Code Repository, Round 1, Namma Space: isometric wireframe of hostel room K-720 (6.21 x 3.93 x 2.82 m) with its bunks and camera path" width="100%">
+  <img src="docs/assets/banner.svg" alt="Namma Space: film a room with your phone, walk it in your browser" width="100%">
 </p>
-
-<p align="center"><i>Namma Space by Team NoGrass: film a room with your phone, walk it in your browser.</i></p>
 
 <p align="center">
   <a href="https://adarcside.github.io/namma-space/"><img alt="Live demo" src="https://img.shields.io/badge/walk_the_room-live_demo-fbbf24?style=flat-square"></a>
