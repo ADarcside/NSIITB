@@ -35,6 +35,22 @@ Laptops load the full scene straight away; phones start with a lighter version s
   <p align="center"><img src="docs/assets/k720-walkthrough.gif" alt="Walking through K-720 in the browser" width="80%"></p>
 -->
 
+## Round 2: find a place, follow the path
+
+Round 2 adds **POI labels, search and walkable-path navigation** to the same viewer. All of it lives on this branch, [`round-2`](https://github.com/ADarcside/NSIITB/tree/round-2). The [`main`](https://github.com/ADarcside/NSIITB/tree/main) branch stays exactly as we submitted it for Round 1.
+
+### → [adarcside.github.io/namma-space/round2](https://adarcside.github.io/namma-space/round2/)
+
+The Round 1 link above stays as it was submitted.
+
+- **Labels:** tagged places float over the room. Click one to see its card, with the walking distance and **Navigate** / **Look**.
+- **Search** (`/`): it handles typos ("dor"), word order, aliases ("almirah" finds the cupboard) and number words, and "Room 4" never matches "Room 14".
+- **Paths that avoid furniture:** A* on the scene's walkable floor grid, kept clear of walls and bunks, drawn as a glowing line on the floor that updates as you walk. **Take me there** walks you along it.
+- **Floor-plan minimap** (`N`): the room footprint, every POI, you, and your route.
+- **Tagging in minutes:** open the viewer with `?tag=1`, walk to a spot, press `P`, type a name. Export `pois.json` and attach it to the scene with `python -m pipeline.pois attach <scene_dir> pois.json`. To move a tag, press `T` (Adjust mode) and drag its label or its minimap dot. A tag can sit anywhere, even on a bunk, and its route ends at the closest floor spot. Ten places took us about 4 minutes.
+
+The details are in [docs/round2-plan.md](docs/round2-plan.md). The data format is in [pipeline/schemas/pois.schema.json](pipeline/schemas/pois.schema.json), the pathfinder in [viewer/src/nav/astar.ts](viewer/src/nav/astar.ts), and search in [viewer/src/nav/search.ts](viewer/src/nav/search.ts).
+
 ## How a room becomes a link
 
 ```mermaid

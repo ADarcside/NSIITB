@@ -167,7 +167,7 @@ function validateAsset(asset: unknown, path: string): string[] {
   if (typeof asset.asset_id !== 'string' || !/^ast_[a-z2-7]{12}$/.test(asset.asset_id)) {
     errs.push(`${path}.asset_id must be 'ast_' + 12 base32 chars [a-z2-7]`);
   }
-  const kinds = ['splat_full', 'splat_lite', 'grid', 'video', 'report'];
+  const kinds = ['splat_full', 'splat_lite', 'grid', 'pois', 'video', 'report'];
   if (!kinds.includes(asset.kind as string)) {
     errs.push(`${path}.kind must be one of: ${kinds.join(', ')}`);
   }
@@ -235,9 +235,11 @@ export function validateSceneManifest(data: unknown): ValidationResult<SceneMani
         errors.push("assets.lite must be a valid asset id ('ast_' + 12 base32 chars [a-z2-7])");
       }
     }
-    if (data.assets.grid !== undefined) {
-      if (typeof data.assets.grid !== 'string' || !/^ast_[a-z2-7]{12}$/.test(data.assets.grid)) {
-        errors.push("assets.grid must be a valid asset id ('ast_' + 12 base32 chars [a-z2-7])");
+    for (const ref of ['grid', 'pois'] as const) {
+      if (data.assets[ref] !== undefined) {
+        if (typeof data.assets[ref] !== 'string' || !/^ast_[a-z2-7]{12}$/.test(data.assets[ref] as string)) {
+          errors.push(`assets.${ref} must be a valid asset id ('ast_' + 12 base32 chars [a-z2-7])`);
+        }
       }
     }
   }
@@ -262,9 +264,11 @@ export function validateSceneManifest(data: unknown): ValidationResult<SceneMani
         errors.push(`asset_table is missing required entry for assets.lite ('${data.assets.lite}')`);
       }
     }
-    if (isObject(data.assets) && typeof data.assets.grid === 'string') {
-      if (!data.asset_table[data.assets.grid]) {
-        errors.push(`asset_table is missing required entry for assets.grid ('${data.assets.grid}')`);
+    for (const ref of ['grid', 'pois'] as const) {
+      if (isObject(data.assets) && typeof data.assets[ref] === 'string') {
+        if (!data.asset_table[data.assets[ref] as string]) {
+          errors.push(`asset_table is missing required entry for assets.${ref} ('${data.assets[ref]}')`);
+        }
       }
     }
   }

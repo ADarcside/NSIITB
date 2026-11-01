@@ -1,0 +1,172 @@
+{
+  "schema_version": 1,
+  "scene_id": "scn_hostelroomac",
+  "updated_at": "2026-11-01T06:00:23Z",
+  "pois": [
+    {
+      "schema_version": 1,
+      "poi_id": "poi_uugb73jnoodm",
+      "scene_id": "scn_hostelroomac",
+      "name": "Front door",
+      "category": "exit",
+      "aliases": [
+        "Exit door",
+        "Main Door"
+      ],
+      "position": {
+        "x": -2.755,
+        "y": 1.2,
+        "z": -0.02
+      },
+      "yaw_deg": 85
+    },
+    {
+      "schema_version": 1,
+      "poi_id": "poi_dnlu5uwe73yj",
+      "scene_id": "scn_hostelroomac",
+      "name": "Bunk1",
+      "category": "furniture",
+      "aliases": [
+        "sleep"
+      ],
+      "position": {
+        "x": 0.023,
+        "y": 1.2,
+        "z": -0.652
+      },
+      "yaw_deg": 84
+    },
+    {
+      "schema_version": 1,
+      "poi_id": "poi_657dlzm7aw3q",
+      "scene_id": "scn_hostelroomac",
+      "name": "Bunk2",
+      "category": "furniture",
+      "aliases": [
+        "sleep"
+      ],
+      "position": {
+        "x": 0.342,
+        "y": 1.2,
+        "z": -0.866
+      },
+      "yaw_deg": 269
+    },
+    {
+      "schema_version": 1,
+      "poi_id": "poi_wcfpfvxqhjiz",
+      "scene_id": "scn_hostelroomac",
+      "name": "Bunk3",
+      "category": "furniture",
+      "aliases": [
+        "sleep"
+      ],
+      "position": {
+        "x": 0.335,
+        "y": 1.2,
+        "z": 0.748
+      },
+      "yaw_deg": 178
+    },
+    {
+      "schema_version": 1,
+      "poi_id": "poi_lhifzjgpkalw",
+      "scene_id": "scn_hostelroomac",
+      "name": "table1",
+      "category": "furniture",
+      "aliases": [
+        "study"
+      ],
+      "position": {
+        "x": -2.168,
+        "y": 1.2,
+        "z": -1.233
+      },
+      "yaw_deg": -37
+    },
+    {
+      "schema_version": 1,
+      "poi_id": "poi_f3iyvqhscqtm",
+      "scene_id": "scn_hostelroomac",
+      "name": "table3",
+      "category": "furniture",
+      "aliases": [
+        "study",
+        "table"
+      ],
+      "position": {
+        "x": -1.35,
+        "y": 1.2,
+        "z": 0.957
+      },
+      "yaw_deg": -157
+    },
+    {
+      "schema_version": 1,
+      "poi_id": "poi_jfq25nlptljy",
+      "scene_id": "scn_hostelroomac",
+      "name": "table4,5",
+      "category": "furniture",
+      "aliases": [
+        "study",
+        "table"
+      ],
+      "position": {
+        "x": 1.921,
+        "y": 1.2,
+        "z": 1.053
+      },
+      "yaw_deg": -176
+    },
+    {
+      "schema_version": 1,
+      "poi_id": "poi_ain2eazgoars",
+      "scene_id": "scn_hostelroomac",
+      "name": "table6",
+      "category": "furniture",
+      "aliases": [
+        "study",
+        "table"
+      ],
+      "position": {
+        "x": 2.21,
+        "y": 1.2,
+        "z": -0.685
+      },
+      "yaw_deg": 4
+    },
+    {
+      "schema_version": 1,
+      "poi_id": "poi_x3oq4fxwxufh",
+      "scene_id": "scn_hostelroomac",
+      "name": "table2",
+      "category": "furniture",
+      "aliases": [
+        "study",
+        "table"
+      ],
+      "position": {
+        "x": 0.081,
+        "y": 1.2,
+        "z": -0.843
+      },
+      "yaw_deg": 2
+    },
+    {
+      "schema_version": 1,
+      "poi_id": "poi_3yc6yqa6737v",
+      "scene_id": "scn_hostelroomac",
+      "name": "Window",
+      "category": "furniture",
+      "aliases": [
+        "curtains"
+      ],
+      "position": {
+        "x": 2.493,
+        "y": 1.2,
+        "z": 0.101
+      },
+      "yaw_deg": -92
+    }
+  ]
+}

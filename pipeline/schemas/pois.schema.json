@@ -1,0 +1,98 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://nammaspace.org/schemas/pois.schema.json",
+  "title": "PoiSet",
+  "description": "Points of interest of one scene (pois.json). position is world metres: x, z on the floor plan, y the label height.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "scene_id",
+    "updated_at",
+    "pois"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "scene_id": {
+      "type": "string",
+      "pattern": "^scn_[a-z2-7]{12}$"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "pois": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "schema_version",
+          "poi_id",
+          "scene_id",
+          "name",
+          "position"
+        ],
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "const": 1
+          },
+          "poi_id": {
+            "type": "string",
+            "pattern": "^poi_[a-z2-7]{12}$"
+          },
+          "scene_id": {
+            "type": "string",
+            "pattern": "^scn_[a-z2-7]{12}$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "category": {
+            "type": "string"
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "description": {
+            "type": "string"
+          },
+          "position": {
+            "type": "object",
+            "required": [
+              "x",
+              "y",
+              "z"
+            ],
+            "properties": {
+              "x": {
+                "type": "number"
+              },
+              "y": {
+                "type": "number"
+              },
+              "z": {
+                "type": "number"
+              }
+            },
+            "additionalProperties": false
+          },
+          "yaw_deg": {
+            "type": "number"
+          },
+          "metadata": {
+            "type": "object"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

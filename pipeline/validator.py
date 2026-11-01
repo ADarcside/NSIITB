@@ -37,10 +37,12 @@ def _load_schema(schema_filename: str) -> dict[str, Any]:
 _CAPTURE_SCHEMA = _load_schema("capture.schema.json")
 _MANIFEST_SCHEMA = _load_schema("manifest.schema.json")
 _NAVGRID_SCHEMA = _load_schema("navgrid.schema.json")
+_POIS_SCHEMA = _load_schema("pois.schema.json")
 
 _CAPTURE_VALIDATOR = Draft7Validator(_CAPTURE_SCHEMA)
 _MANIFEST_VALIDATOR = Draft7Validator(_MANIFEST_SCHEMA)
 _NAVGRID_VALIDATOR = Draft7Validator(_NAVGRID_SCHEMA)
+_POIS_VALIDATOR = Draft7Validator(_POIS_SCHEMA)
 
 
 def is_valid_schema_capture(data: dict[str, Any]) -> bool:
@@ -56,6 +58,11 @@ def is_valid_schema_manifest(data: dict[str, Any]) -> bool:
 def is_valid_schema_navgrid(data: dict[str, Any]) -> bool:
     """Return True if data satisfies navgrid.schema.json alone."""
     return isinstance(data, dict) and _NAVGRID_VALIDATOR.is_valid(data)
+
+
+def is_valid_schema_pois(data: dict[str, Any]) -> bool:
+    """Return True if data satisfies pois.schema.json alone."""
+    return isinstance(data, dict) and _POIS_VALIDATOR.is_valid(data)
 
 
 def _format_error(e: jsonschema.ValidationError) -> str:
@@ -129,7 +136,7 @@ def validate_manifest(data: dict[str, Any]) -> None:
         assets = data["assets"]
         asset_table = data["asset_table"]
         if isinstance(assets, dict) and isinstance(asset_table, dict):
-            for ref_name in ("full", "lite", "grid"):
+            for ref_name in ("full", "lite", "grid", "pois"):
                 asset_id = assets.get(ref_name)
                 if asset_id and asset_id not in asset_table:
                     errors.append(f"asset_table is missing referenced asset '{ref_name}': {asset_id}")
@@ -197,3 +204,37 @@ def load_and_validate_navgrid(file_path: str | Path) -> dict[str, Any]:
         data = json.load(f)
     validate_navgrid(data)
     return data
+
+
+def validate_pois(data: dict[str, Any]) -> None:
+    """
+    Validate a points of interest dictionary against pois.schema.json.
+    Raises ValidationError if invalid.
+    """
+    if not isinstance(data, dict):
+        raise ValidationError("PoiSet data must be a dictionary")
+
+    errors = [_format_error(e) for e in _POIS_VALIDATOR.iter_errors(data)]
+    if errors:
+        raise ValidationError(
+            f"PoiSet validation failed:\n- " + "\n- ".join(errors),
+            errors=errors,
+        )
+
+
+def is_valid_pois(data: dict[str, Any]) -> bool:
+    """Return True if POI data is valid, False otherwise."""
+    try:
+        validate_pois(data)
+        return True
+    except ValidationError:
+        return False
+
+
+def load_and_validate_pois(file_path: str | Path) -> dict[str, Any]:
+    """Load JSON from path and validate as PoiSet."""
+    with open(file_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    validate_pois(data)
+    return data
+

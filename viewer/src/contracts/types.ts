@@ -69,7 +69,7 @@ export interface Capture {
   notes?: string;
 }
 
-export type AssetKind = 'splat_full' | 'splat_lite' | 'grid' | 'video' | 'report';
+export type AssetKind = 'splat_full' | 'splat_lite' | 'grid' | 'pois' | 'video' | 'report';
 export type AssetFormat = 'spz' | 'ply' | 'json' | 'mp4';
 
 /**
@@ -126,6 +126,8 @@ export interface SceneManifest {
     full: Id;
     lite?: Id;
     grid?: Id;
+    /** Round 2: pois.json (PoiSet) */
+    pois?: Id;
   };
   asset_table: Record<Id, Asset>;
   transform: SpatialTransform;
@@ -175,16 +177,30 @@ export interface ReconJob {
   scene_id?: Id;
 }
 
+/**
+ * Point of interest (Round 2). position is in world metres: x, z on the floor plan where the POI is,
+ * y the label height above the floor. Navigation goes to the nearest walkable cell to (x, z).
+ */
 export interface POI {
   schema_version: 1;
   poi_id: Id;
   scene_id: Id;
   name: string;
   category?: string;
+  /** Other names people search for, e.g. ["MR4", "Board room"] */
+  aliases?: string[];
   description?: string;
   position: { x: number; y: number; z: number };
   yaw_deg?: number;
   metadata?: Record<string, unknown>;
+}
+
+/** pois.json: all POIs of one scene (Round 2). */
+export interface PoiSet {
+  schema_version: 1;
+  scene_id: Id;
+  updated_at: string;
+  pois: POI[];
 }
 
 export interface Route {

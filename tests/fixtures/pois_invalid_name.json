@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "scene_id": "scn_testroomaa34",
+  "updated_at": "2026-10-31T12:00:00Z",
+  "pois": [
+    {
+      "schema_version": 1,
+      "poi_id": "poi_desk72abcdef",
+      "scene_id": "scn_testroomaa34",
+      "name": "",
+      "category": "furniture",
+      "position": {
+        "x": 2.05,
+        "y": 1.2,
+        "z": -0.74
+      }
+    }
+  ]
+}

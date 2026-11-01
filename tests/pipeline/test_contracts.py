@@ -19,9 +19,13 @@ from pipeline.validator import (
     validate_navgrid,
     is_valid_navgrid,
     is_valid_schema_navgrid,
+    validate_pois,
+    is_valid_pois,
+    is_valid_schema_pois,
     load_and_validate_capture,
     load_and_validate_manifest,
     load_and_validate_navgrid,
+    load_and_validate_pois,
 )
 
 FIXTURES_DIR = Path(__file__).resolve().parent.parent / "fixtures"
@@ -60,6 +64,9 @@ def test_cross_validator_parity_all_fixtures():
         elif contract == "NavGrid":
             schema_valid = is_valid_schema_navgrid(data)
             full_valid = is_valid_navgrid(data)
+        elif contract == "PoiSet":
+            schema_valid = is_valid_schema_pois(data)
+            full_valid = is_valid_pois(data)
         else:
             pytest.fail(f"Unknown contract type in expected.json: {contract}")
 
@@ -246,3 +253,25 @@ class TestNavGridContract:
         with pytest.raises(ValidationError) as exc_info:
             validate_navgrid(data)
         assert any("origin" in err or "items" in err for err in exc_info.value.errors)
+
+
+class TestPoiSetContract:
+    def test_valid_pois(self):
+        data = load_fixture("pois_valid.json")
+        validate_pois(data)
+        assert is_valid_pois(data) is True
+
+    def test_load_and_validate_pois(self):
+        file_path = FIXTURES_DIR / "pois_valid.json"
+        data = load_and_validate_pois(file_path)
+        assert data["schema_version"] == 1
+        assert data["scene_id"] == "scn_testroomaa34"
+        assert len(data["pois"]) == 2
+
+    def test_invalid_name(self):
+        data = load_fixture("pois_invalid_name.json")
+        assert is_valid_pois(data) is False
+        with pytest.raises(ValidationError) as exc_info:
+            validate_pois(data)
+        assert any("name" in err for err in exc_info.value.errors)
+

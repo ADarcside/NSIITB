@@ -60,6 +60,10 @@
         "grid": {
           "type": "string",
           "pattern": "^ast_[a-z2-7]{12}$"
+        },
+        "pois": {
+          "type": "string",
+          "pattern": "^ast_[a-z2-7]{12}$"
         }
       },
       "additionalProperties": false
@@ -95,6 +99,7 @@
               "splat_full",
               "splat_lite",
               "grid",
+              "pois",
               "video",
               "report"
             ]

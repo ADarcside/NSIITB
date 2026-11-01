@@ -477,4 +477,159 @@ describe('Walk mode jump', () => {
     run(c, 30);
     expect(Math.abs(c.cameraOffset.y)).toBeLessThan(1e-3);
   });
+
+  describe('lookAt smooth transition', () => {
+    it('eases yaw and pitch to face target, taking shortest direction across ±π', () => {
+      const c = new FirstPersonMovementController({
+        startPose: { x: 0, z: 0, yaw_deg: 175 }, // yaw ≈ +3.054 rad
+        eyeHeightM: 1.5,
+        collision: new GhostCollisionProvider({ minX: -5, maxX: 5, minZ: -5, maxZ: 5 }),
+      });
+
+      // Target is at (-0.1, 1.5, 1.0) -> in +Z direction, slightly -X
+      // Direction: dx = -0.1, dz = 1.0. targetYaw = atan2(0.1, -1.0) ≈ -3.042 rad
+      // Starting from +3.054 rad to -3.042 rad across ±π is a jump of ~0.186 rad,
+      // NOT the long way round (~6.1 rad).
+      const target = { x: -0.1, y: 1.5, z: 1.0 };
+      const durationS = 0.6;
+      c.lookAt(target.x, target.y, target.z, durationS);
+
+      const startYaw = c.pose.yaw;
+      expect(startYaw).toBeCloseTo((175 * Math.PI) / 180, 2);
+
+      // Midpoint: t = 0.3s
+      for (let i = 0; i < 6; i++) {
+        c.update(0.05); // 0.3s total
+      }
+
+      // Easing should be halfway at midpoint
+      const midYaw = c.pose.yaw;
+      // Should have moved towards π boundary (increasing above 3.054 or wrapping), NOT decreasing towards 0
+      expect(Math.abs(midYaw)).toBeGreaterThan(3.0);
+
+      // Finish duration: another 0.3s (0.6s total)
+      for (let i = 0; i < 6; i++) {
+        c.update(0.05);
+      }
+
+      // After duration, yaw is within 0.01 rad of the target
+      const expectedTargetYaw = Math.atan2(-(-0.1), -1.0);
+      let diff = Math.abs(c.pose.yaw - expectedTargetYaw);
+      if (diff > Math.PI) diff = 2 * Math.PI - diff;
+      expect(diff).toBeLessThan(0.01);
+
+      // Pitch should be 0 since target y == eyeHeight
+      expect(c.pose.pitch).toBeCloseTo(0, 2);
+
+      // Position should be completely unchanged
+      expect(c.pose.x).toBe(0);
+      expect(c.pose.y).toBe(1.5);
+      expect(c.pose.z).toBe(0);
+    });
+
+    it('cancels lookAt when user moves mouse', () => {
+      const c = new FirstPersonMovementController({
+        startPose: { x: 0, z: 0, yaw_deg: 0 },
+        eyeHeightM: 1.5,
+        collision: new GhostCollisionProvider({ minX: -5, maxX: 5, minZ: -5, maxZ: 5 }),
+      });
+
+      c.lookAt(5, 1.5, 0, 1.0); // Target at 90 deg
+      c.update(0.1);
+      const yawBefore = c.pose.yaw;
+
+      // Mouse look cancels transition
+      c.handleMouseMove(10, 0);
+      c.update(0.5);
+
+      // Since transition was canceled, yaw should only have changed by mouse look, not continued lookAt
+      const expectedYaw = yawBefore - 10 * 0.002;
+      expect(c.pose.yaw).toBeCloseTo(expectedYaw, 3);
+    });
+
+    it('auto-walk steps along path points and stops on WASD key', () => {
+      const c = new FirstPersonMovementController({
+        startPose: { x: 0, z: 0, yaw_deg: 0 },
+        eyeHeightM: 1.5,
+        collision: new GhostCollisionProvider({ minX: -5, maxX: 5, minZ: -5, maxZ: 5 }),
+      });
+
+      const path = [
+        { x: 0, z: 0 },
+        { x: 0, z: -1.0 },
+        { x: 0, z: -2.0 },
+      ];
+
+      let arrived = false;
+      let canceled = false;
+      c.startAutoWalk(path, () => { arrived = true; }, () => { canceled = true; });
+      expect(c.isAutoWalking).toBe(true);
+
+      // Step forward along path
+      c.update(0.05);
+      expect(c.pose.z).toBeLessThan(0); // Moved forward towards -Z
+
+      // Pressing KeyS cancels auto-walk
+      c.handleKeyDown('KeyS');
+      expect(c.isAutoWalking).toBe(false);
+      expect(canceled).toBe(true);
+      expect(arrived).toBe(false);
+    });
+
+    it('auto-walk stops within 2s of simulated time when path is blocked by grid obstacle', () => {
+      // 3x3 synthetic NavGrid (1m x 1m):
+      // Row 0 (z in [0, 1)): free
+      // Row 1 (z in [1, 2)): BLOCKED
+      // Row 2 (z in [2, 3)): free
+      const bytes = new Uint8Array([0xe3, 0x80]);
+      const b64 = Buffer.from(bytes).toString('base64');
+      const navgrid: NavGrid = {
+        schema_version: 1,
+        nav_id: 'nav_blocked_test',
+        transform_scene: 'scn_test',
+        cell_m: 1.0,
+        origin: [0, 0],
+        width: 3,
+        height: 3,
+        agent_radius_m: 0.25,
+        free_bits_b64: b64,
+      };
+
+      const gridCol = new GridCollisionProvider(navgrid);
+      const c = new FirstPersonMovementController({
+        startPose: { x: 0.5, z: 0.5, yaw_deg: 0 },
+        eyeHeightM: 1.5,
+        collision: gridCol,
+      });
+
+      // Path was planned to (0.5, 2.5), but row 1 is blocked
+      const path = [
+        { x: 0.5, z: 0.5 },
+        { x: 0.5, z: 2.5 },
+      ];
+
+      let canceledStuck: boolean | undefined = undefined;
+      c.startAutoWalk(
+        path,
+        () => {},
+        (stuck?: boolean) => {
+          canceledStuck = stuck;
+        }
+      );
+      expect(c.isAutoWalking).toBe(true);
+
+      let simulatedTimeS = 0;
+      const dt = 0.05;
+      while (c.isAutoWalking && simulatedTimeS < 5.0) {
+        c.update(dt);
+        simulatedTimeS += dt;
+      }
+
+      // Must stop within 2s of simulated time (1.5s stuck detection + initial travel)
+      expect(c.isAutoWalking).toBe(false);
+      expect(simulatedTimeS).toBeLessThanOrEqual(2.0);
+      expect(simulatedTimeS).toBeGreaterThanOrEqual(1.5);
+      expect(canceledStuck).toBe(true);
+    });
+  });
 });

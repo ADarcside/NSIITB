@@ -110,5 +110,19 @@
     "expected_valid": true,
     "check_layer": null,
     "description": "Fully compliant scene manifest with null scale_check_error_pct when camera-height prior is used"
+  },
+  {
+    "fixture": "pois_valid.json",
+    "contract": "PoiSet",
+    "expected_valid": true,
+    "check_layer": null,
+    "description": "Fully compliant points of interest set with valid RFC 4648 base32 IDs and 3D positions"
+  },
+  {
+    "fixture": "pois_invalid_name.json",
+    "contract": "PoiSet",
+    "expected_valid": false,
+    "check_layer": "schema",
+    "description": "PoiSet containing a POI with empty name string violating minLength 1"
   }
 ]

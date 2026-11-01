@@ -55,3 +55,7 @@ site/
 
 # Exception: the published K-720 scene ships as sample data for reviewers
 !sample/test-capture/**/*.spz
+
+# Playwright CLI output (may contain credentials)
+.playwright-cli/
+.playwright/

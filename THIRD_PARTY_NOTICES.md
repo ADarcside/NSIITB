@@ -28,6 +28,8 @@ This document registers all third-party software components, libraries, and tool
 | **Brush** | Apache-2.0 | Fallback visual reconstruction engine (F1) | https://github.com/ArthurBrussee/brush |
 | **Recast Navigation** (Round 2+) | zlib / MIT | Navigation mesh generation upgrade | https://github.com/recastnavigation/recastnavigation |
 | **FastAPI / Pydantic** (Round 2+) | MIT | HTTP API service contracts | https://github.com/fastapi/fastapi |
+| **Space Grotesk** font (variable 300-700, latin subset, woff2) | SIL OFL 1.1 (`viewer/src/assets/fonts/OFL-SpaceGrotesk.txt`) | Viewer UI typeface, self-hosted and bundled by Vite | https://github.com/floriankarsten/space-grotesk (woff2 via Google Fonts) |
+| **Rye** font (Regular, latin subset, woff2) | SIL OFL 1.1, Reserved Font Name "Rye" (`viewer/src/assets/fonts/OFL-Rye.txt`) | Display face for the loading-screen room name, unmodified | https://github.com/google/fonts/tree/main/ofl/rye (woff2 via Google Fonts) |
 
 ---
 
