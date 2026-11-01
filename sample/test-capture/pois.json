@@ -24,7 +24,7 @@
       "schema_version": 1,
       "poi_id": "poi_dnlu5uwe73yj",
       "scene_id": "scn_hostelroomac",
-      "name": "Bunk1",
+      "name": "Bunk 1",
       "category": "furniture",
       "aliases": [
         "sleep"
@@ -40,7 +40,7 @@
       "schema_version": 1,
       "poi_id": "poi_657dlzm7aw3q",
       "scene_id": "scn_hostelroomac",
-      "name": "Bunk2",
+      "name": "Bunk 2",
       "category": "furniture",
       "aliases": [
         "sleep"
@@ -56,7 +56,7 @@
       "schema_version": 1,
       "poi_id": "poi_wcfpfvxqhjiz",
       "scene_id": "scn_hostelroomac",
-      "name": "Bunk3",
+      "name": "Bunk 3",
       "category": "furniture",
       "aliases": [
         "sleep"
@@ -72,7 +72,7 @@
       "schema_version": 1,
       "poi_id": "poi_lhifzjgpkalw",
       "scene_id": "scn_hostelroomac",
-      "name": "table1",
+      "name": "Table 1",
       "category": "furniture",
       "aliases": [
         "study"
@@ -88,7 +88,7 @@
       "schema_version": 1,
       "poi_id": "poi_f3iyvqhscqtm",
       "scene_id": "scn_hostelroomac",
-      "name": "table3",
+      "name": "Table 3",
       "category": "furniture",
       "aliases": [
         "study",
@@ -105,7 +105,7 @@
       "schema_version": 1,
       "poi_id": "poi_jfq25nlptljy",
       "scene_id": "scn_hostelroomac",
-      "name": "table4,5",
+      "name": "Tables 4 & 5",
       "category": "furniture",
       "aliases": [
         "study",
@@ -122,7 +122,7 @@
       "schema_version": 1,
       "poi_id": "poi_ain2eazgoars",
       "scene_id": "scn_hostelroomac",
-      "name": "table6",
+      "name": "Table 6",
       "category": "furniture",
       "aliases": [
         "study",
@@ -139,7 +139,7 @@
       "schema_version": 1,
       "poi_id": "poi_x3oq4fxwxufh",
       "scene_id": "scn_hostelroomac",
-      "name": "table2",
+      "name": "Table 2",
       "category": "furniture",
       "aliases": [
         "study",
