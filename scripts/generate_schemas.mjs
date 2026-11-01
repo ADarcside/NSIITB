@@ -199,7 +199,8 @@ const manifestSchema = {
       properties: {
         full: { type: 'string', pattern: '^ast_[a-z2-7]{12}$' },
         lite: { type: 'string', pattern: '^ast_[a-z2-7]{12}$' },
-        grid: { type: 'string', pattern: '^ast_[a-z2-7]{12}$' }
+        grid: { type: 'string', pattern: '^ast_[a-z2-7]{12}$' },
+        pois: { type: 'string', pattern: '^ast_[a-z2-7]{12}$' }
       },
       additionalProperties: false
     },
@@ -216,7 +217,7 @@ const manifestSchema = {
           asset_id: { type: 'string', pattern: '^ast_[a-z2-7]{12}$' },
           kind: {
             type: 'string',
-            enum: ['splat_full', 'splat_lite', 'grid', 'video', 'report']
+            enum: ['splat_full', 'splat_lite', 'grid', 'pois', 'video', 'report']
           },
           format: {
             type: 'string',

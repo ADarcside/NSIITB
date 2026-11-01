@@ -17,7 +17,13 @@ import { GhostCollisionProvider } from './collision/ghost.js';
 import { GridCollisionProvider } from './collision/grid.js';
 import { FirstPersonMovementController, BASE_FOV_DEG, type MoveMode } from './controls/movement.js';
 import { Footsteps } from './controls/footsteps.js';
-import { VanillaAppUI } from './ui/app_ui.js';
+import { VanillaAppUI, isTypingTarget } from './ui/app_ui.js';
+import { NavUI } from './ui/nav_ui.js';
+import { RouteView } from './nav/route_view.js';
+import { MinimapUI } from './ui/minimap.js';
+import { NavPlanner, type Point2 } from './nav/astar.js';
+import { validatePoiSet, PoiDraftStore } from './nav/pois.js';
+import { TagUI } from './ui/tag_ui.js';
 import {
   parseSceneParam,
   fetchAndValidateManifest,
@@ -25,7 +31,7 @@ import {
   fetchAssetWithVerification,
 } from './loader/manifest.js';
 import { ViewerError } from './types.js';
-import type { NavGrid } from './contracts/types.js';
+import type { NavGrid, POI } from './contracts/types.js';
 
 async function bootstrap() {
   const canvas = document.getElementById('viewer-canvas') as HTMLCanvasElement;
@@ -40,6 +46,9 @@ async function bootstrap() {
   // Configurable base URL
   const baseUrl = (import.meta.env.VITE_PUBLIC_BASE_URL as string) || '';
 
+  const searchParams = new URLSearchParams(window.location.search);
+  const isTagMode = searchParams.get('tag') === '1';
+
   // 2. UI Initialization
   let activeMode: 'Ghost' | 'Grid' = 'Ghost';
   let ghostProvider: GhostCollisionProvider | null = null;
@@ -48,7 +57,7 @@ async function bootstrap() {
   let adaptQuality: ((fps: number) => void) | null = null;
 
   // Movement mode: free roam (default, Q/E fly) or walk (fixed height, game feel); ?move=walk starts in walk
-  let moveMode: MoveMode = new URLSearchParams(window.location.search).get('move') === 'walk' ? 'walk' : 'free';
+  let moveMode: MoveMode = searchParams.get('move') === 'walk' ? 'walk' : 'free';
   const moveLabel = (m: MoveMode) => (m === 'walk' ? 'Walk' : 'Free roam');
   const footsteps = new Footsteps();
   const toggleMove = () => {
@@ -58,6 +67,7 @@ async function bootstrap() {
     ui.setVolumeVisible(moveMode === 'walk');
   };
   window.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (isTypingTarget(e)) return;
     if (e.ctrlKey || e.altKey || e.metaKey || e.repeat) return;
     if (e.code === 'KeyF') toggleMove();
     if (e.code === 'KeyM') {
@@ -68,11 +78,16 @@ async function bootstrap() {
     if (e.code === 'Space') e.preventDefault();
   });
   window.addEventListener('keyup', (e: KeyboardEvent) => {
+    if (isTypingTarget(e)) return;
     if (e.code === 'Space') e.preventDefault();
   });
 
+  let minimap: MinimapUI | null = null;
+
   const ui = new VanillaAppUI({
     isDevScene,
+    isTagMode,
+    sceneId: sceneParam,
     initialMode: 'Ghost',
     onReset: () => {
       movementController?.reset();
@@ -85,6 +100,9 @@ async function bootstrap() {
       footsteps.setVolume(v);
     },
     onVolumeCommit: () => footsteps.play(),
+    onMinimapToggle: () => {
+      minimap?.toggle();
+    },
     onModeToggle: () => {
       if (!gridProvider) {
         alert('Grid collision data is not available for this scene. Running in Ghost mode.');
@@ -134,6 +152,156 @@ async function bootstrap() {
     // 5. Collision Providers (Ghost is default)
     ghostProvider = new GhostCollisionProvider(manifest.bounds);
 
+    const routeView = new RouteView(renderer.scene);
+    const navUI = new NavUI();
+    minimap = new MinimapUI({ isTagMode });
+
+    let planner: NavPlanner | null = null;
+    let targetPoi: POI | null = null;
+    let currentPathPoints: Point2[] | null = null;
+    let lastPlanPose: { x: number; z: number } | null = null;
+    let lastPlanTime = 0;
+
+    const planRoute = (poi: POI, animate = true) => {
+      targetPoi = poi;
+      if (!movementController) return;
+      const pose = movementController.pose;
+      lastPlanPose = { x: pose.x, z: pose.z };
+      lastPlanTime = performance.now();
+
+      if (planner) {
+        const path = planner.findPath(
+          { x: pose.x, z: pose.z },
+          { x: poi.position.x, z: poi.position.z }
+        );
+        if (path) {
+          currentPathPoints = path.points;
+          routeView.setPath(path.points, animate);
+          navUI.setRoute(poi.name, path.lengthM);
+          routeView.setHighlight(poi.poi_id);
+        } else {
+          currentPathPoints = null;
+          routeView.setPath(null, animate);
+          navUI.setRoute(poi.name, null);
+          routeView.setHighlight(poi.poi_id);
+        }
+      } else {
+        // If there is no grid (Ghost-only scene), draw a straight line and append "(straight line, no floor map)"
+        const points: Point2[] = [
+          { x: pose.x, z: pose.z },
+          { x: poi.position.x, z: poi.position.z },
+        ];
+        const dist = Math.hypot(poi.position.x - pose.x, poi.position.z - pose.z);
+        currentPathPoints = points;
+        routeView.setPath(points, animate);
+        navUI.setRoute(poi.name, dist, ' (straight line, no floor map)');
+        routeView.setHighlight(poi.poi_id);
+      }
+    };
+
+    const getDistanceToPoi = (poi: POI): number | null => {
+      if (!movementController) return null;
+      const pose = movementController.pose;
+      if (planner) {
+        const path = planner.findPath(
+          { x: pose.x, z: pose.z },
+          { x: poi.position.x, z: poi.position.z }
+        );
+        return path ? path.lengthM : null;
+      }
+      return Math.hypot(poi.position.x - pose.x, poi.position.z - pose.z);
+    };
+
+    const lookAtPoi = (poi: POI) => {
+      movementController?.lookAt(
+        poi.position.x,
+        poi.position.y ?? manifest.eye_height_m,
+        poi.position.z,
+        0.6
+      );
+    };
+
+    // On pick from search dropdown: opens card, starts route, and turns camera smoothly
+    navUI.onPick(poi => {
+      const dist = getDistanceToPoi(poi);
+      navUI.showPoiCard(poi, dist);
+      planRoute(poi, true);
+      lookAtPoi(poi);
+    });
+
+    // Clicking POI label in 3D scene opens POI card
+    routeView.onPick(poi => {
+      targetPoi = poi;
+      tagUI?.selectPoi(poi.poi_id);
+      const dist = getDistanceToPoi(poi);
+      navUI.showPoiCard(poi, dist);
+      routeView.setHighlight(poi.poi_id);
+    });
+
+    // Clicking POI dot on minimap opens POI card
+    minimap.onSelectPoi(poi => {
+      targetPoi = poi;
+      tagUI?.selectPoi(poi.poi_id);
+      const dist = getDistanceToPoi(poi);
+      navUI.showPoiCard(poi, dist);
+      routeView.setHighlight(poi.poi_id);
+    });
+
+    // POI card: Navigate button
+    navUI.onNavigate(poi => {
+      planRoute(poi, true);
+      lookAtPoi(poi);
+    });
+
+    // POI card: Look button
+    navUI.onLook(poi => {
+      lookAtPoi(poi);
+    });
+
+    // Route card: Take me there (auto-walk)
+    navUI.onToggleAutoWalk(() => {
+      if (!movementController) return;
+      if (movementController.isAutoWalking) {
+        movementController.stopAutoWalk(true);
+        navUI.setAutoWalking(false);
+        return;
+      }
+      if (!currentPathPoints || currentPathPoints.length < 2) return;
+      navUI.setAutoWalking(true);
+      movementController.startAutoWalk(
+        currentPathPoints,
+        () => {
+          navUI.setAutoWalking(false);
+          if (targetPoi) {
+            const arrivedName = targetPoi.name;
+            targetPoi = null;
+            currentPathPoints = null;
+            routeView.setPath(null);
+            routeView.setHighlight(null);
+            navUI.showArrived(arrivedName);
+          }
+        },
+        (stuck?: boolean) => {
+          navUI.setAutoWalking(false);
+          if (stuck && targetPoi) {
+            navUI.showBlocked(targetPoi.name);
+          }
+        }
+      );
+    });
+
+    navUI.onClear(() => {
+      if (movementController?.isAutoWalking) {
+        movementController.stopAutoWalk(true);
+        navUI.setAutoWalking(false);
+      }
+      targetPoi = null;
+      currentPathPoints = null;
+      routeView.setPath(null);
+      routeView.setHighlight(null);
+      navUI.hidePoiCard();
+    });
+
     // If grid asset is defined in manifest, attempt to load it in background
     if (manifest.assets.grid && manifest.asset_table[manifest.assets.grid]) {
       const gridAsset = manifest.asset_table[manifest.assets.grid];
@@ -142,6 +310,11 @@ async function bootstrap() {
           const text = new TextDecoder().decode(buf);
           const gridData = JSON.parse(text) as NavGrid;
           gridProvider = new GridCollisionProvider(gridData);
+          planner = new NavPlanner(gridData);
+          minimap?.setGrid(gridData);
+          if (targetPoi) {
+            planRoute(targetPoi, false);
+          }
           // Walls and furniture are solid by default once the walkable grid is in; the Mode button switches back to Ghost
           activeMode = 'Grid';
           movementController?.setCollision(gridProvider);
@@ -160,18 +333,209 @@ async function bootstrap() {
       mode: moveMode,
       onFootstep: sprint => footsteps.play(sprint),
       onLand: () => footsteps.play(false, true),
+      onReset: () => {
+        if (targetPoi) {
+          planRoute(targetPoi, false);
+        }
+      },
     });
     movementController.attachDomListeners(canvas);
+    // Dev builds only: lets screenshot scripts place the camera
+    if (import.meta.env.DEV) {
+      (window as unknown as { __movementController?: FirstPersonMovementController }).__movementController = movementController;
+    }
+
+    // 6b. Tag Mode UI & POIs Loading (Round 2)
+    let tagUI: TagUI | null = null;
+    let placeTag: ((x: number, z: number) => void) | null = null;
+    let activePois: POI[] = [];
+    let manifestPois: POI[] = [];
+
+    const draftStore = new PoiDraftStore(manifest.scene_id);
+    const initialDraft = isTagMode ? draftStore.load() : null;
+
+    if (isTagMode) {
+      tagUI = new TagUI({
+        sceneId: manifest.scene_id,
+        getPose: () => movementController!.pose,
+        isWalkable: (x, z) => (planner ? planner.isWalkable(x, z) : true),
+        onPoisChange: pois => {
+          activePois = pois;
+          navUI.setPois(activePois);
+          routeView.setPois(activePois);
+        },
+        onAdjustChange: on => {
+          minimap?.setPlaceMode(on);
+          routeView.setDraggable(on);
+        },
+      });
+
+      if (initialDraft !== null) {
+        activePois = initialDraft;
+        navUI.setPois(activePois);
+        routeView.setPois(activePois);
+        tagUI.setPois(activePois);
+        tagUI.showToast(`Loaded draft (${initialDraft.length} places)`);
+      }
+
+      window.addEventListener('keydown', (e: KeyboardEvent) => {
+        if (isTypingTarget(e)) return;
+        if (e.ctrlKey || e.altKey || e.metaKey || e.repeat) return;
+        if (e.code === 'KeyP') {
+          e.preventDefault();
+          tagUI?.openAdd();
+        } else if (e.code === 'KeyT' && !tagUI?.isFormOpen) {
+          e.preventDefault();
+          tagUI?.toggleAdjust();
+        }
+      });
+
+      // Moves the selected tag (Adjust mode floor/map click, or Shift-click on the map)
+      placeTag = (x: number, z: number) => {
+        if (!tagUI) return;
+        if (!tagUI.selectedPoi && targetPoi) tagUI.selectPoi(targetPoi.poi_id);
+        const moved = tagUI.moveSelected(x, z);
+        if (moved && targetPoi?.poi_id === moved.poi_id) {
+          planRoute(moved, false);
+          navUI.showPoiCard(moved, getDistanceToPoi(moved));
+        }
+      };
+      minimap.onRelocate((x, z) => placeTag?.(x, z));
+
+      // Adjust mode drags: the label follows live (labels are projected from poi.position each frame),
+      // and the drop saves the draft and replans a route that goes to this tag.
+      const dropTag = (poi: POI, x: number, z: number) => {
+        if (!tagUI) return;
+        tagUI.movePoi(poi, x, z);
+        if (targetPoi?.poi_id === poi.poi_id) {
+          planRoute(poi, false);
+          navUI.showPoiCard(poi, getDistanceToPoi(poi));
+        }
+      };
+      minimap.onDragPoi((poi, x, z, done) => {
+        if (done) dropTag(poi, x, z);
+        else {
+          poi.position.x = x;
+          poi.position.z = z;
+        }
+      });
+
+      const floorRay = new THREE.Raycaster();
+      const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+      const floorAt = (clientX: number, clientY: number): THREE.Vector3 | null => {
+        const rect = canvas.getBoundingClientRect();
+        const ndc = new THREE.Vector2(
+          ((clientX - rect.left) / rect.width) * 2 - 1,
+          -((clientY - rect.top) / rect.height) * 2 + 1
+        );
+        floorRay.setFromCamera(ndc, camera);
+        const hit = floorRay.ray.intersectPlane(floorPlane, new THREE.Vector3());
+        return hit && hit.distanceTo(camera.position) <= 30 ? hit : null;
+      };
+      routeView.onPillPointerDown((poi, down) => {
+        if (!tagUI?.adjustMode) return false;
+        const start = { x: down.clientX, y: down.clientY, px: poi.position.x, pz: poi.position.z };
+        let moved = false;
+        const onMove = (e: PointerEvent) => {
+          if (e.pointerId !== down.pointerId) return;
+          if (!moved && Math.hypot(e.clientX - start.x, e.clientY - start.y) < 4) return;
+          moved = true;
+          document.body.style.cursor = 'grabbing';
+          const hit = floorAt(e.clientX, e.clientY);
+          if (hit) {
+            poi.position.x = hit.x;
+            poi.position.z = hit.z;
+          }
+        };
+        const onUp = (e: PointerEvent) => {
+          if (e.pointerId !== down.pointerId) return;
+          window.removeEventListener('pointermove', onMove);
+          window.removeEventListener('pointerup', onUp);
+          window.removeEventListener('pointercancel', onUp);
+          document.body.style.cursor = '';
+          if (!moved) {
+            // A plain press still opens the card, as before
+            routeView.suppressNextClick();
+            tagUI?.selectPoi(poi.poi_id);
+            targetPoi = poi;
+            navUI.showPoiCard(poi, getDistanceToPoi(poi));
+            routeView.setHighlight(poi.poi_id);
+            return;
+          }
+          routeView.suppressNextClick();
+          if (poi.position.x === start.px && poi.position.z === start.pz) {
+            tagUI?.showToast('Drag onto the floor to move a tag');
+            return;
+          }
+          dropTag(poi, poi.position.x, poi.position.z);
+        };
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onUp);
+        window.addEventListener('pointercancel', onUp);
+        return true;
+      });
+    }
+
+    const applyPois = (poiList: POI[]) => {
+      manifestPois = poiList;
+      if (tagUI) {
+        tagUI.setManifestPois(manifestPois);
+      }
+      if (!isTagMode || initialDraft === null) {
+        activePois = poiList;
+        navUI.setPois(activePois);
+        routeView.setPois(activePois);
+        if (tagUI) {
+          tagUI.setPois(activePois);
+        }
+      }
+    };
+
+    const devPoisUrl = searchParams.get('pois');
+    const loadPois = async () => {
+      try {
+        if (devPoisUrl) {
+          // Dev-only switch: load POI JSON directly from ?pois=<url> without hash verification
+          const res = await fetch(devPoisUrl);
+          if (!res.ok) throw new Error(`HTTP ${res.status} fetching dev pois from "${devPoisUrl}"`);
+          const data = (await res.json()) as unknown;
+          const errs = validatePoiSet(data);
+          if (errs.length > 0) {
+            console.warn('[Viewer] Invalid dev pois.json:', errs);
+            return;
+          }
+          const poiList = (data as { pois: POI[] }).pois;
+          console.info('[Viewer] Loaded POIs from manifest:', poiList.length);
+          applyPois(poiList);
+        } else if (manifest.assets.pois && manifest.asset_table[manifest.assets.pois]) {
+          const poisAsset = manifest.asset_table[manifest.assets.pois];
+          const buf = await fetchAssetWithVerification(poisAsset);
+          const text = new TextDecoder().decode(buf);
+          const data = JSON.parse(text) as unknown;
+          const errs = validatePoiSet(data);
+          if (errs.length > 0) {
+            console.warn('[Viewer] Invalid pois.json in manifest:', errs);
+            return;
+          }
+          const poiList = (data as { pois: POI[] }).pois;
+          console.info('[Viewer] Loaded POIs from manifest:', poiList.length);
+          applyPois(poiList);
+        }
+      } catch (err) {
+        console.warn('[Viewer] Optional POIs could not be loaded:', err);
+      }
+    };
+    void loadPois();
 
     // Pointer Lock click-to-lock
     canvas.addEventListener('click', () => {
+      if (tagUI?.isFormOpen) return;
       if (document.pointerLockElement !== canvas) {
         canvas.requestPointerLock();
       }
     });
 
     // Temporary dev diagnostic option: allow loading dev_full.ply directly via ?format=ply or ?ply=true
-    const searchParams = new URLSearchParams(window.location.search);
     const forcePly = isDevScene && (searchParams.get('format') === 'ply' || searchParams.get('ply') === 'true');
 
     if (forcePly) {
@@ -300,6 +664,10 @@ async function bootstrap() {
 
       // Update movement physics & camera
       if (movementController) {
+        if (!movementController.isAutoWalking && navUI.isAutoWalking) {
+          navUI.setAutoWalking(false);
+        }
+
         movementController.update(dt);
         const pose = movementController.pose;
         // Walk mode head bob / sway / sprint FOV are camera-only (zero and BASE_FOV_DEG in free roam)
@@ -314,6 +682,49 @@ async function bootstrap() {
           camera.fov = off.fov;
           camera.updateProjectionMatrix();
         }
+
+        // Route progress & arrival check
+        if (targetPoi) {
+          if (currentPathPoints && currentPathPoints.length > 0) {
+            const goal = currentPathPoints[currentPathPoints.length - 1];
+            const distToGoal = Math.hypot(pose.x - goal.x, pose.z - goal.z);
+            if (distToGoal < 0.6) {
+              const arrivedName = targetPoi.name;
+              targetPoi = null;
+              currentPathPoints = null;
+              routeView.setPath(null);
+              routeView.setHighlight(null);
+              navUI.showArrived(arrivedName);
+            } else if (
+              !movementController.isAutoWalking &&
+              lastPlanPose &&
+              currentTime - lastPlanTime >= 500 &&
+              Math.hypot(pose.x - lastPlanPose.x, pose.z - lastPlanPose.z) > 0.25
+            ) {
+              planRoute(targetPoi, false);
+            }
+          } else if (
+            !movementController.isAutoWalking &&
+            lastPlanPose &&
+            currentTime - lastPlanTime >= 500 &&
+            Math.hypot(pose.x - lastPlanPose.x, pose.z - lastPlanPose.z) > 0.25
+          ) {
+            planRoute(targetPoi, false);
+          }
+        }
+      }
+
+      // Update route ribbon animation and POI label overlays
+      routeView.update(camera, dt);
+
+      // Update floor-plan minimap
+      if (movementController && minimap) {
+        minimap.render(
+          movementController.pose,
+          activePois,
+          currentPathPoints,
+          (tagUI?.adjustMode ? tagUI.selectedPoi?.poi_id : null) ?? targetPoi?.poi_id ?? null
+        );
       }
 
       renderer.render(camera);

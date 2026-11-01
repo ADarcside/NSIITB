@@ -17,6 +17,7 @@ import {
   type POI,
   type Route,
 } from '../../viewer/src/contracts/index.js';
+import { validatePoiSet } from '../../viewer/src/nav/pois.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -29,7 +30,7 @@ function loadJson(filename: string): unknown {
 
 interface ExpectedItem {
   fixture: string;
-  contract: 'Capture' | 'SceneManifest' | 'NavGrid';
+  contract: 'Capture' | 'SceneManifest' | 'NavGrid' | 'PoiSet';
   expected_valid: boolean;
   check_layer: 'schema' | 'semantic' | null;
   description: string;
@@ -56,6 +57,9 @@ describe('Phase 1 Contracts: Cross-Validator Parity via expected.json', () => {
       } else if (item.contract === 'NavGrid') {
         const res = validateNavGrid(data);
         isValid = res.valid;
+      } else if (item.contract === 'PoiSet') {
+        const errors = validatePoiSet(data);
+        isValid = errors.length === 0;
       }
 
       expect(isValid).toBe(item.expected_valid);
@@ -261,5 +265,20 @@ describe('Phase 1 Contracts: Types-Only (ReconJob, POI, Route)', () => {
     };
     expect(route.schema_version).toBe(1);
     expect(route.waypoints.length).toBe(2);
+  });
+});
+
+describe('Phase 2 Contracts: PoiSet', () => {
+  it('validates a correct pois payload', () => {
+    const data = loadJson('pois_valid.json');
+    const errors = validatePoiSet(data);
+    expect(errors).toHaveLength(0);
+  });
+
+  it('rejects an invalid POI name', () => {
+    const data = loadJson('pois_invalid_name.json');
+    const errors = validatePoiSet(data);
+    expect(errors.length).toBeGreaterThan(0);
+    expect(errors.some(e => e.includes('name'))).toBe(true);
   });
 });

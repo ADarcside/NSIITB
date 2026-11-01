@@ -15,6 +15,7 @@ import type { SceneRenderer, Matrix4Tuple, AssetRef } from '../types.js';
 import type { Mat4 } from '../contracts/types.js';
 import { assertWebGL2 } from '../loader/manifest.js';
 import { ViewerError } from '../types.js';
+import { THEME } from '../ui/tokens.js';
 
 export interface SparkSceneRendererOptions {
   canvas?: HTMLCanvasElement;
@@ -54,6 +55,8 @@ export class SparkSceneRenderer implements SceneRenderer {
     });
     const pixelRatio = typeof window !== 'undefined' ? window.devicePixelRatio : 1;
     this._renderer.setPixelRatio(Math.min(pixelRatio || 1, 2));
+    // Clear to the page colour, so the frames before the first splats draw match the loading screen
+    this._renderer.setClearColor(THEME.bg, 1);
 
     // 3. WebGL Context Loss Handling
     this._onContextLostHandler = (e: Event) => {

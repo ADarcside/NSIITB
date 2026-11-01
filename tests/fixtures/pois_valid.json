@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "scene_id": "scn_testroomaa34",
+  "updated_at": "2026-10-31T12:00:00Z",
+  "pois": [
+    {
+      "schema_version": 1,
+      "poi_id": "poi_desk72abcdef",
+      "scene_id": "scn_testroomaa34",
+      "name": "Study desk",
+      "category": "furniture",
+      "aliases": ["table", "desk"],
+      "description": "Wooden study desk",
+      "position": {
+        "x": 2.05,
+        "y": 1.2,
+        "z": -0.74
+      },
+      "yaw_deg": 90
+    },
+    {
+      "schema_version": 1,
+      "poi_id": "poi_door72abcdef",
+      "scene_id": "scn_testroomaa34",
+      "name": "Exit door",
+      "category": "exit",
+      "aliases": ["door", "exit"],
+      "position": {
+        "x": -1.85,
+        "y": 1.2,
+        "z": 0.91
+      }
+    }
+  ]
+}

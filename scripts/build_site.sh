@@ -17,6 +17,7 @@ rm -rf "$out" && mv "$out.tmp" "$out"
 mkdir -p "$out/$scene_id"
 cp "$scene_dir"/manifest.json "$scene_dir"/*.spz "$out/$scene_id/"
 if [ -f "$scene_dir/grid.json" ]; then cp "$scene_dir/grid.json" "$out/$scene_id/"; fi
+if [ -f "$scene_dir/pois.json" ]; then cp "$scene_dir/pois.json" "$out/$scene_id/"; fi
 touch "$out/.nojekyll"   # GitHub Pages: serve files as they are
 du -sh "$out" "$out/$scene_id"/*
 echo "Site ready in $out/ (opens $scene_id by default). Test: npx vite preview --outDir $out  or  python -m http.server -d $out"

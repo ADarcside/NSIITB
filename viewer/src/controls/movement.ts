@@ -15,6 +15,8 @@
 
 import type { CollisionProvider, MovementController, Pose3D, Vec2, Bounds } from '../types.js';
 import type { Pose2D } from '../contracts/types.js';
+import type { Point2 } from '../nav/astar.js';
+import { isTypingTarget } from '../ui/app_ui.js';
 
 export const WALK_SPEED = 1.4;
 export const SPRINT_SPEED = 2.5;
@@ -51,6 +53,26 @@ export const LAND_DIP_M = 0.04;
 /** Search step and radius when entering walk mode at a spot the walking body does not fit */
 const LAND_STEP_M = 0.05;
 const LAND_RADIUS_M = 2;
+
+interface LookAtTransition {
+  startYaw: number;
+  diffYaw: number;
+  startPitch: number;
+  diffPitch: number;
+  durationS: number;
+  elapsedS: number;
+}
+
+interface AutoWalkState {
+  points: Point2[];
+  targetIndex: number;
+  stuckTimerS: number;
+  stuckSampleX: number;
+  stuckSampleZ: number;
+  stuck?: boolean;
+  onArrive?: () => void;
+  onCancel?: (stuck?: boolean) => void;
+}
 
 export interface CameraOffset {
   /** Added to the camera height */
@@ -147,6 +169,7 @@ export interface MovementControllerOptions {
   onFootstep?: (sprint: boolean) => void;
   /** Walk mode: called when a jump lands */
   onLand?: () => void;
+  onReset?: () => void;
 }
 
 export class FirstPersonMovementController implements MovementController {
@@ -177,18 +200,22 @@ export class FirstPersonMovementController implements MovementController {
   private _offset: CameraOffset = { y: 0, side: 0, fov: BASE_FOV_DEG };
   onFootstep?: (sprint: boolean) => void;
   onLand?: () => void;
+  private readonly _onReset?: () => void;
   private _jumpHeld = false;
   /** A new jump needs a fresh Space press: holding Space does not repeat */
   private _jumpArmed = true;
   private _jumpHeight = 0;
   private _vy = 0;
   private _landDip = 0;
+  private _lookAtTransition: LookAtTransition | null = null;
+  private _autoWalk: AutoWalkState | null = null;
 
   constructor(options: MovementControllerOptions) {
     this._startPose = options.startPose;
     this._eyeHeight = options.eyeHeightM;
     this._collision = options.collision;
     this._mouseSensitivity = options.mouseSensitivity ?? 0.002;
+    this._onReset = options.onReset;
     this.onFootstep = options.onFootstep;
     this.onLand = options.onLand;
 
@@ -274,6 +301,86 @@ export class FirstPersonMovementController implements MovementController {
     return { ...this._pose };
   }
 
+  setPose(p: Partial<Pose3D>): void {
+    if (p.x !== undefined) this._pose.x = p.x;
+    if (p.y !== undefined) this._pose.y = p.y;
+    if (p.z !== undefined) this._pose.z = p.z;
+    if (p.yaw !== undefined) this._pose.yaw = p.yaw;
+    if (p.pitch !== undefined) this._pose.pitch = p.pitch;
+  }
+
+  /**
+   * Smoothly turns camera yaw and pitch to face target world point (x, y, z) over durationS.
+   * Eased with ease-in-out along shortest yaw direction across ±π, with pitch clamped.
+   * Mouse movement during transition cancels it. Does not move position.
+   */
+  lookAt(x: number, y: number, z: number, durationS = 0.6): void {
+    const dx = x - this._pose.x;
+    const dy = y - this._pose.y;
+    const dz = z - this._pose.z;
+
+    const targetYaw = Math.atan2(-dx, -dz);
+    const horizDist = Math.hypot(dx, dz);
+    const rawTargetPitch = Math.atan2(dy, horizDist);
+    const targetPitch = Math.max(-MAX_PITCH_RAD, Math.min(MAX_PITCH_RAD, rawTargetPitch));
+
+    let diffYaw = targetYaw - this._pose.yaw;
+    while (diffYaw > Math.PI) diffYaw -= 2 * Math.PI;
+    while (diffYaw < -Math.PI) diffYaw += 2 * Math.PI;
+
+    const diffPitch = targetPitch - this._pose.pitch;
+
+    if (durationS <= 0) {
+      this._pose.yaw += diffYaw;
+      while (this._pose.yaw > Math.PI) this._pose.yaw -= 2 * Math.PI;
+      while (this._pose.yaw < -Math.PI) this._pose.yaw += 2 * Math.PI;
+      this._pose.pitch = targetPitch;
+      this._lookAtTransition = null;
+      return;
+    }
+
+    this._lookAtTransition = {
+      startYaw: this._pose.yaw,
+      diffYaw,
+      startPitch: this._pose.pitch,
+      diffPitch,
+      durationS,
+      elapsedS: 0,
+    };
+  }
+
+  /**
+   * Auto-walks the camera along the path waypoints at walking speed (1.4 m/s),
+   * facing along the path with collision enabled. Any WASD key or mouse look cancels it.
+   */
+  startAutoWalk(points: Point2[], onArrive?: () => void, onCancel?: (stuck?: boolean) => void): void {
+    if (!points || points.length < 2) return;
+    this.clearKeys();
+    this._lookAtTransition = null;
+    this._autoWalk = {
+      points,
+      targetIndex: 1,
+      stuckTimerS: 0,
+      stuckSampleX: this._pose.x,
+      stuckSampleZ: this._pose.z,
+      onArrive,
+      onCancel,
+    };
+  }
+
+  stopAutoWalk(canceled = false, stuck = false): void {
+    if (!this._autoWalk) return;
+    const wasStuck = stuck || (this._autoWalk.stuck ?? false);
+    const cb = canceled ? this._autoWalk.onCancel : this._autoWalk.onArrive;
+    this._autoWalk = null;
+    this._currentSpeed = 0;
+    cb?.(wasStuck);
+  }
+
+  get isAutoWalking(): boolean {
+    return this._autoWalk !== null;
+  }
+
   get currentSpeed(): number {
     return this._currentSpeed;
   }
@@ -310,6 +417,8 @@ export class FirstPersonMovementController implements MovementController {
 
   reset(): void {
     this.clearKeys();
+    this._lookAtTransition = null;
+    if (this._autoWalk) this.stopAutoWalk(true);
     this._currentSpeed = 0;
     this._heightOffset = 0;
     this._flying = false;
@@ -325,9 +434,25 @@ export class FirstPersonMovementController implements MovementController {
     this._bobAmp = 0;
     this._cancelJump();
     if (this._mode === 'walk') this._offset = { y: 0, side: 0, fov: BASE_FOV_DEG };
+    this._onReset?.();
   }
 
   handleKeyDown(code: string): void {
+    if (this._autoWalk) {
+      switch (code) {
+        case 'KeyW':
+        case 'ArrowUp':
+        case 'KeyS':
+        case 'ArrowDown':
+        case 'KeyA':
+        case 'ArrowLeft':
+        case 'KeyD':
+        case 'ArrowRight':
+        case 'Space':
+          this.stopAutoWalk(true);
+          break;
+      }
+    }
     switch (code) {
       case 'KeyW':
       case 'ArrowUp':
@@ -400,6 +525,10 @@ export class FirstPersonMovementController implements MovementController {
   }
 
   handleMouseMove(deltaX: number, deltaY: number): void {
+    if (deltaX !== 0 || deltaY !== 0) {
+      this._lookAtTransition = null;
+      if (this._autoWalk) this.stopAutoWalk(true);
+    }
     // Mouse X controls horizontal yaw
     this._pose.yaw -= deltaX * this._mouseSensitivity;
 
@@ -412,6 +541,7 @@ export class FirstPersonMovementController implements MovementController {
 
   attachDomListeners(targetElement: HTMLElement): void {
     const onKeyDown = (e: KeyboardEvent) => {
+      if (isTypingTarget(e)) return;
       // Don't intercept browser shortcuts if modifier keys other than Shift are held
       if (e.ctrlKey || e.altKey || e.metaKey) return;
       this.handleKeyDown(e.code);
@@ -462,6 +592,95 @@ export class FirstPersonMovementController implements MovementController {
 
   update(dt: number): void {
     const effectiveDt = Math.max(0, Math.min(dt, MAX_DT));
+
+    // 1. Smooth lookAt transition
+    if (this._lookAtTransition) {
+      this._lookAtTransition.elapsedS += effectiveDt;
+      const t = Math.min(1.0, this._lookAtTransition.elapsedS / this._lookAtTransition.durationS);
+      const ease = 0.5 * (1 - Math.cos(Math.PI * t));
+      this._pose.yaw = this._lookAtTransition.startYaw + this._lookAtTransition.diffYaw * ease;
+      this._pose.pitch = this._lookAtTransition.startPitch + this._lookAtTransition.diffPitch * ease;
+      if (t >= 1.0) {
+        this._pose.yaw = this._lookAtTransition.startYaw + this._lookAtTransition.diffYaw;
+        while (this._pose.yaw > Math.PI) this._pose.yaw -= 2 * Math.PI;
+        while (this._pose.yaw < -Math.PI) this._pose.yaw += 2 * Math.PI;
+        this._pose.pitch = this._lookAtTransition.startPitch + this._lookAtTransition.diffPitch;
+        this._lookAtTransition = null;
+      }
+    }
+
+    // 2. Auto-walk along path points
+    if (this._autoWalk) {
+      const pts = this._autoWalk.points;
+      let target = pts[this._autoWalk.targetIndex];
+      let dx = target.x - this._pose.x;
+      let dz = target.z - this._pose.z;
+      let dist = Math.hypot(dx, dz);
+
+      while (dist < 0.25 && this._autoWalk.targetIndex < pts.length - 1) {
+        this._autoWalk.targetIndex++;
+        target = pts[this._autoWalk.targetIndex];
+        dx = target.x - this._pose.x;
+        dz = target.z - this._pose.z;
+        dist = Math.hypot(dx, dz);
+      }
+
+      const isFinalWaypoint = this._autoWalk.targetIndex === pts.length - 1;
+      if (isFinalWaypoint && dist < 0.45) {
+        this.stopAutoWalk(false);
+      } else if (dist > 0.001) {
+        const wishX = dx / dist;
+        const wishZ = dz / dist;
+        const wish: Vec2 = { x: wishX, z: wishZ };
+
+        // Smoothly face along the path
+        const targetYaw = Math.atan2(-wishX, -wishZ);
+        let diffYaw = targetYaw - this._pose.yaw;
+        while (diffYaw > Math.PI) diffYaw -= 2 * Math.PI;
+        while (diffYaw < -Math.PI) diffYaw += 2 * Math.PI;
+        const turnAlpha = 1 - Math.exp(-effectiveDt / 0.12);
+        this._pose.yaw += diffYaw * turnAlpha;
+        this._pose.pitch += (0 - this._pose.pitch) * turnAlpha;
+
+        const startX = this._pose.x, startZ = this._pose.z;
+        const newPose = step(this._pose, wish, WALK_SPEED, effectiveDt, this._collision);
+        this._pose.x = newPose.x;
+        this._pose.z = newPose.z;
+
+        const clamped = clampToBounds(this._pose, this._collision.bounds());
+        this._pose.x = clamped.x;
+        this._pose.z = clamped.z;
+        this._currentSpeed = WALK_SPEED;
+
+        // Stuck detection: if walker moves less than 0.05m in total over 1.5s while auto-walking, stop
+        const distFromSample = Math.hypot(
+          this._pose.x - this._autoWalk.stuckSampleX,
+          this._pose.z - this._autoWalk.stuckSampleZ
+        );
+        if (distFromSample >= 0.05) {
+          this._autoWalk.stuckSampleX = this._pose.x;
+          this._autoWalk.stuckSampleZ = this._pose.z;
+          this._autoWalk.stuckTimerS = 0;
+        } else {
+          this._autoWalk.stuckTimerS += effectiveDt;
+          if (this._autoWalk.stuckTimerS >= 1.5) {
+            this._autoWalk.stuck = true;
+            this.stopAutoWalk(true);
+            return;
+          }
+        }
+
+        if (this._mode === 'walk') {
+          this._updateJump(effectiveDt);
+          this._pose.y = this._eyeHeight + this._jumpHeight;
+          this._updateWalkFeel(Math.hypot(this._pose.x - startX, this._pose.z - startZ), effectiveDt);
+          return;
+        } else {
+          this._pose.y = this._eyeHeight + this._heightOffset;
+          return;
+        }
+      }
+    }
 
     // Calculate movement intent along camera axes
     let moveForward = 0;
