@@ -302,7 +302,7 @@ On Windows, run the Python parts inside WSL and open the repo from WSL in VS Cod
 
 We're **team NoGrass**: **Satvik Garg** and **Aditya Gupta**, two students at VIT Vellore, building this for the Namma Space challenge at Techfest, IIT Bombay. K-720 is one of our own hostel rooms, which made it the obvious first test subject.
 
-**Built with.** Namma Space stands on COLMAP, Nerfstudio and gsplat, PyTorch, Three.js, Spark, PlayCanvas splat-transform, OpenCV, NumPy and more. Every dependency and its licence is in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). We also leaned on AI coding assistants (Claude, and the Antigravity IDE) for much of the code and docs; [SPEC.md](SPEC.md) is the brief we worked from. The filming, the measuring, and the calls on what to ship were ours.
+**Built with.** Namma Space stands on COLMAP, Nerfstudio and gsplat, PyTorch, Three.js, Spark, PlayCanvas splat-transform, OpenCV, NumPy and more. Every dependency and its licence is in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). We also leaned on AI coding assistants for much of the code and docs; [SPEC.md](SPEC.md) is the brief we worked from. The filming, the measuring, and the calls on what to ship were ours.
 
 Our own code is under the [MIT licence](LICENSE).
 
