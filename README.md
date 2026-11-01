@@ -49,6 +49,8 @@ The Round 1 link above stays as it was submitted.
 - **Floor-plan minimap** (`N`): the room footprint, every POI, you, and your route.
 - **Tagging in minutes:** open the viewer with `?tag=1`, walk to a spot, press `P`, type a name. Export `pois.json` and attach it to the scene with `python -m pipeline.pois attach <scene_dir> pois.json`. To move a tag, press `T` (Adjust mode) and drag its label or its minimap dot. A tag can sit anywhere, even on a bunk, and its route ends at the closest floor spot. Ten places took us about 4 minutes.
 
+To see the tags locally, copy `sample/test-capture/pois.json` into `viewer/public/` as well (next to the scene, see [Try the viewer](#1-try-the-viewer-no-gpu)) and open `http://localhost:5173/?scene=scn_hostelroomac&pois=/pois.json`.
+
 The details are in [docs/round2-plan.md](docs/round2-plan.md). The data format is in [pipeline/schemas/pois.schema.json](pipeline/schemas/pois.schema.json), the pathfinder in [viewer/src/nav/astar.ts](viewer/src/nav/astar.ts), and search in [viewer/src/nav/search.ts](viewer/src/nav/search.ts).
 
 ## How a room becomes a link
