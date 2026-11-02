@@ -390,6 +390,8 @@ const ICON_PATHS: Record<string, string> = {
   trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
   walk: '<path d="M5 12h12M13 6l6 6-6 6"/>',
   stop: '<rect x="6" y="6" width="12" height="12" rx="2"/>',
+  tag: '<path d="M3 12V4h8l10 10-8 8L3 12z"/><circle cx="7.5" cy="8.5" r="1.5"/>',
+  tagOff: '<path d="M3 12V4h8l10 10-8 8L3 12z"/><circle cx="7.5" cy="8.5" r="1.5"/><path d="M3 3l18 18"/>',
 };
 
 export function icon(name: keyof typeof ICON_PATHS | string, size = 16): string {

@@ -153,6 +153,35 @@ describe('FirstPersonMovementController', () => {
   const bounds: Bounds = { minX: -3.0, maxX: 3.0, minZ: -3.0, maxZ: 3.0 };
   const ghostCol = new GhostCollisionProvider(bounds);
 
+  it('touch joystick moves forward at a speed set by the tilt, and stops on release', () => {
+    const make = () => new FirstPersonMovementController({
+      startPose: { x: 0, z: 0, yaw_deg: 0 }, eyeHeightM: 1.5, collision: ghostCol,
+    });
+    const full = make();
+    const half = make();
+    full.setAnalog(1, 0);
+    half.setAnalog(0.3, 0);
+    for (let i = 0; i < 60; i++) { full.update(1 / 60); half.update(1 / 60); }
+    // yaw 0 faces -Z
+    expect(full.pose.z).toBeLessThan(-0.5);
+    expect(half.pose.z).toBeLessThan(0);
+    expect(half.pose.z).toBeGreaterThan(full.pose.z);
+    full.setAnalog(0, 0);
+    for (let i = 0; i < 60; i++) full.update(1 / 60);
+    const z = full.pose.z;
+    full.update(1 / 60);
+    expect(full.pose.z).toBeCloseTo(z, 5);
+  });
+
+  it('touch Up button raises the eye in free roam', () => {
+    const c = new FirstPersonMovementController({
+      startPose: { x: 0, z: 0, yaw_deg: 0 }, eyeHeightM: 1.5, collision: ghostCol,
+    });
+    c.setVertical(true, false);
+    for (let i = 0; i < 30; i++) c.update(1 / 60);
+    expect(c.pose.y).toBeGreaterThan(1.5);
+  });
+
   it('initializes pose from start_pose and eye_height_m', () => {
     const controller = new FirstPersonMovementController({
       startPose: { x: 1.0, z: -1.5, yaw_deg: 90.0 },

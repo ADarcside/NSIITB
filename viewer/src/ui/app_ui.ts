@@ -51,6 +51,21 @@ const DESKTOP_TIPS = ['Press / to search', 'N opens the map', 'Click a label to 
 const TOUCH_TIPS = ['Tap the search bar to find a place', 'Map opens the floor plan', 'Tap a label to navigate'];
 const TIP_INTERVAL_MS = 4000;
 
+/** Help on phones and tablets: the on-screen controls instead of keys */
+const TOUCH_HELP = `
+        <div class="help-grid">
+          <div><kbd>Stick</kbd></div><div>Move (bottom left). Tilt a little to creep, pull past the ring to run</div>
+          <div><kbd>Drag</kbd></div><div>Drag anywhere on the view to look around</div>
+          <div><kbd>&#9650;</kbd> <kbd>&#9660;</kbd></div><div>Free roam: fly up / down (bottom right)</div>
+          <div><kbd>Jump</kbd></div><div>Walk: jump (bottom right)</div>
+          <div><kbd>Walk</kbd></div><div>Top bar: switch Walk (person height) / Free roam</div>
+          <div><kbd>Grid</kbd></div><div>Top bar: walls solid (Grid) or walk through them (Ghost)</div>
+          <div><kbd>Tags</kbd></div><div>Show / hide the place labels</div>
+          <div><kbd>Map</kbd></div><div>Show / hide the floor plan</div>
+          <div><kbd>Search</kbd></div><div>Find a place, then Navigate or Take me there</div>
+          <div><kbd>Reset</kbd></div><div>Back to the start spot</div>
+        </div>`;
+
 export interface AppUIOptions {
   container?: HTMLElement;
   isDevScene?: boolean;
@@ -69,6 +84,11 @@ export interface AppUIOptions {
   onVolumeCommit?: () => void;
   /** Floor-plan minimap toggle (N) */
   onMinimapToggle?: () => void;
+  /** Show / hide the place labels in the view (L) */
+  onLabelsToggle?: () => void;
+  /** Scene quality chip (Lite / HD): tap to switch */
+  onQualityToggle?: () => void;
+  initialLabelsVisible?: boolean;
 }
 
 export class VanillaAppUI implements AppUI {
@@ -98,6 +118,8 @@ export class VanillaAppUI implements AppUI {
 
   private _isHelpVisible = false;
   private _helpReturnFocus: HTMLElement | null = null;
+  private _labelsBtn!: HTMLButtonElement;
+  private _qualityBtn!: HTMLButtonElement;
   private _mode: 'Ghost' | 'Grid' = 'Ghost';
   private readonly _onReset?: () => void;
   private readonly _onModeToggle?: () => void;
@@ -154,6 +176,17 @@ export class VanillaAppUI implements AppUI {
     fpsBadge.innerHTML = '<span class="hud-chip-k">FPS</span><span class="hud-chip-v ns-num">--</span>';
     this._fpsValue = fpsBadge.querySelector('.hud-chip-v') as HTMLElement;
     statusGroup.appendChild(fpsBadge);
+
+    // Scene quality: Lite (fast first load) or HD (full scene). Hidden until a scene has both.
+    this._qualityBtn = document.createElement('button');
+    this._qualityBtn.id = 'quality-btn';
+    this._qualityBtn.className = 'hud-chip hud-chip-btn ns-press hidden';
+    this._qualityBtn.innerHTML = '<span class="hud-chip-k">Quality</span><span class="hud-chip-v"></span>';
+    this._qualityBtn.addEventListener('click', () => {
+      this._qualityBtn.blur();
+      options.onQualityToggle?.();
+    });
+    statusGroup.appendChild(this._qualityBtn);
 
     const modeBadge = document.createElement('button');
     modeBadge.id = 'mode-indicator';
@@ -233,6 +266,14 @@ export class VanillaAppUI implements AppUI {
       mapBtn.blur();
       options.onMinimapToggle?.();
     });
+
+    this._labelsBtn = makeAction('labels-toggle-btn', 'tag', 'Tags', 'L', 'Show or hide place tags (L)');
+    this._labelsBtn.setAttribute('aria-pressed', 'true');
+    this._labelsBtn.addEventListener('click', () => {
+      this._labelsBtn.blur();
+      options.onLabelsToggle?.();
+    });
+    this.setLabelsVisible(options.initialLabelsVisible ?? true);
 
     this._helpBtn = makeAction('help-toggle-btn', 'help', 'Help', 'H', 'Toggle Controls Help (H)');
     this._helpBtn.setAttribute('aria-controls', 'help-overlay');
@@ -315,7 +356,7 @@ export class VanillaAppUI implements AppUI {
     this._helpOverlay.innerHTML = `
       <div class="help-card" role="dialog" aria-modal="true" aria-labelledby="help-title">
         <h2 id="help-title">Controls & navigation</h2>
-        <div class="help-grid">
+        ${isTouch ? TOUCH_HELP : `        <div class="help-grid">
           <div><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd></div><div>Walk (Forward, Left, Back, Right)</div>
           <div><kbd>Shift</kbd></div><div>Fast Walk (2.5 m/s)</div>
           <div><kbd>F</kbd></div><div>Switch Walk (person height, game feel) / Free roam</div>
@@ -325,13 +366,14 @@ export class VanillaAppUI implements AppUI {
           <div><kbd>/</kbd></div><div>Search places</div>
           <div><kbd>Esc</kbd></div><div>Close search / release mouse</div>
           <div><kbd>N</kbd></div><div>Toggle minimap</div>
+          <div><kbd>L</kbd></div><div>Show / hide place tags</div>
           ${tagRow}
           <div><kbd>Mouse</kbd></div><div>Look around (Yaw & Pitch +/-85&deg;)</div>
           <div><kbd>Click</kbd></div><div>Lock mouse cursor to look</div>
           <div><kbd>Esc</kbd></div><div>Release mouse cursor</div>
           <div><kbd>R</kbd></div><div>Reset to start pose</div>
           <div><kbd>H</kbd></div><div>Toggle this help overlay</div>
-        </div>
+        </div>`}
         <button id="close-help-btn" class="ns-btn ns-btn-primary ns-press">Got it</button>
       </div>
     `;
@@ -355,6 +397,9 @@ export class VanillaAppUI implements AppUI {
       }
       if (e.code === 'KeyN' && !e.ctrlKey && !e.altKey && !e.metaKey) {
         options.onMinimapToggle?.();
+      }
+      if (e.code === 'KeyL' && !e.ctrlKey && !e.altKey && !e.metaKey && !e.repeat) {
+        options.onLabelsToggle?.();
       }
       if (e.key === 'Escape' && this._isHelpVisible) {
         this.toggleHelp();
@@ -454,8 +499,29 @@ export class VanillaAppUI implements AppUI {
     this._errorPanel.classList.remove('hidden');
   }
 
+  /** Quality chip: lite, loading the full scene, or HD */
+  setQuality(state: 'lite' | 'loading' | 'hd'): void {
+    this._qualityBtn.classList.remove('hidden');
+    const v = this._qualityBtn.querySelector('.hud-chip-v') as HTMLElement;
+    v.textContent = state === 'hd' ? 'HD' : state === 'loading' ? 'HD…' : 'Lite';
+    this._qualityBtn.classList.toggle('loading', state === 'loading');
+    this._qualityBtn.title = state === 'hd'
+      ? 'Full-quality scene. Tap for Lite (faster)'
+      : state === 'loading' ? 'Loading the full-quality scene…' : 'Lite scene. Tap for HD (full quality)';
+  }
+
+  /** Tags button state: pressed while the place labels are shown */
+  setLabelsVisible(visible: boolean): void {
+    this._labelsBtn.setAttribute('aria-pressed', String(visible));
+    this._labelsBtn.classList.toggle('off', !visible);
+    const svg = this._labelsBtn.querySelector('svg');
+    if (svg) svg.outerHTML = icon(visible ? 'tag' : 'tagOff', 16);
+    this._labelsBtn.title = visible ? 'Hide place tags (L)' : 'Show place tags (L)';
+  }
+
   toggleHelp(): void {
     this._isHelpVisible = !this._isHelpVisible;
+    document.documentElement.classList.toggle('ns-help-open', this._isHelpVisible);
     this._helpBtn.setAttribute('aria-expanded', String(this._isHelpVisible));
     if (this._isHelpVisible) {
       this._helpReturnFocus = document.activeElement as HTMLElement | null;
@@ -630,11 +696,39 @@ export class VanillaAppUI implements AppUI {
         .hud-group { flex: none; }
         /* Tag mode is shown in the Places sheet header on phones, so the HUD row keeps Map and Help */
         .hud-tag-badge { display: none; }
+        .hud-label, .hud-chip-k { display: none; }
+        .hud-button { padding: 0; width: 35px; justify-content: center; }
+        .hud-chip { padding: 0 4px; font-size: var(--ns-fs-xs); }
+        .fps-badge .hud-chip-v::after { content: ' fps'; color: var(--ns-text-muted); font-weight: 500; }
+        .volume-box input[type='range'] { width: 72px; }
+      }
+
+      /* Landscape phones: search (left) and the HUD (right) share one compact top row */
+      @media (pointer: coarse) and (max-height: 520px) {
+        .hud-top-right {
+          top: var(--ns-hud-top);
+          left: auto;
+          right: var(--ns-hud-right);
+          flex-wrap: nowrap;
+          max-width: calc(100% - var(--ns-hud-left) - var(--ns-hud-right) - min(300px, 36vw) - 12px);
+          justify-content: flex-end;
+          overflow-x: auto;
+          scrollbar-width: none;
+          gap: 6px;
+        }
+        .hud-top-right::-webkit-scrollbar { display: none; }
+        .hud-group { flex: none; }
+        .hud-tag-badge { display: none; }
         .hud-label, .hud-chip-btn .hud-chip-k { display: none; }
         .hud-button { padding: 0; width: var(--ns-target); justify-content: center; }
         .hud-chip { padding: 0 8px; }
-        .volume-box input[type='range'] { width: 72px; }
+        .volume-box input[type='range'] { width: 64px; }
       }
+      #quality-btn.hidden { display: none; }
+      #quality-btn.loading .hud-chip-v { animation: ns-quality-pulse 1s ease-in-out infinite; }
+      @keyframes ns-quality-pulse { 50% { opacity: 0.35; } }
+      /* Tags button while the labels are hidden */
+      .hud-button.off { color: var(--ns-text-muted); }
 
       /* ---------- Loading screen (inspired by techfest.org: dark dusk, gold, a symmetric glowing gate) ---------- */
       .loading-overlay {

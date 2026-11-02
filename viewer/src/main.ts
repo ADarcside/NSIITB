@@ -21,6 +21,7 @@ import { VanillaAppUI, isTypingTarget } from './ui/app_ui.js';
 import { NavUI } from './ui/nav_ui.js';
 import { RouteView } from './nav/route_view.js';
 import { MinimapUI } from './ui/minimap.js';
+import { TouchControls, isTouchDevice } from './controls/touch_controls.js';
 import { NavPlanner, type Point2 } from './nav/astar.js';
 import { validatePoiSet, PoiDraftStore } from './nav/pois.js';
 import { TagUI } from './ui/tag_ui.js';
@@ -55,6 +56,7 @@ async function bootstrap() {
   let gridProvider: GridCollisionProvider | null = null;
   let movementController: FirstPersonMovementController | null = null;
   let adaptQuality: ((fps: number) => void) | null = null;
+  let onQualityToggle: (() => void) | null = null;
 
   // Movement mode: free roam (default, Q/E fly) or walk (fixed height, game feel); ?move=walk starts in walk
   let moveMode: MoveMode = searchParams.get('move') === 'walk' ? 'walk' : 'free';
@@ -65,7 +67,9 @@ async function bootstrap() {
     movementController?.setMode(moveMode);
     ui.setMoveMode(moveLabel(moveMode));
     ui.setVolumeVisible(moveMode === 'walk');
+    touchControls?.setMode(moveMode);
   };
+  let touchControls: TouchControls | null = null;
   window.addEventListener('keydown', (e: KeyboardEvent) => {
     if (isTypingTarget(e)) return;
     if (e.ctrlKey || e.altKey || e.metaKey || e.repeat) return;
@@ -83,6 +87,26 @@ async function bootstrap() {
   });
 
   let minimap: MinimapUI | null = null;
+  let routeViewRef: RouteView | null = null;
+
+  // Tags button / L: show or hide the place labels; remembered on this device
+  const LABELS_KEY = 'namma.labelsVisible';
+  let labelsVisible = true;
+  try {
+    labelsVisible = window.localStorage.getItem(LABELS_KEY) !== '0';
+  } catch {
+    /* private mode: default on */
+  }
+  const toggleLabels = () => {
+    labelsVisible = !labelsVisible;
+    routeViewRef?.setLabelsVisible(labelsVisible);
+    ui.setLabelsVisible(labelsVisible);
+    try {
+      window.localStorage.setItem(LABELS_KEY, labelsVisible ? '1' : '0');
+    } catch {
+      /* not saved */
+    }
+  };
 
   const ui = new VanillaAppUI({
     isDevScene,
@@ -103,6 +127,9 @@ async function bootstrap() {
     onMinimapToggle: () => {
       minimap?.toggle();
     },
+    onLabelsToggle: toggleLabels,
+    onQualityToggle: () => onQualityToggle?.(),
+    initialLabelsVisible: labelsVisible,
     onModeToggle: () => {
       if (!gridProvider) {
         alert('Grid collision data is not available for this scene. Running in Ghost mode.');
@@ -153,6 +180,8 @@ async function bootstrap() {
     ghostProvider = new GhostCollisionProvider(manifest.bounds);
 
     const routeView = new RouteView(renderer.scene);
+    routeViewRef = routeView;
+    routeView.setLabelsVisible(labelsVisible);
     const navUI = new NavUI();
     minimap = new MinimapUI({ isTagMode });
 
@@ -340,6 +369,14 @@ async function bootstrap() {
       },
     });
     movementController.attachDomListeners(canvas);
+    // Phones and tablets: joystick to move, drag to look, Up / Down (Free roam) or Jump (Walk)
+    if (isTouchDevice()) {
+      touchControls = new TouchControls({
+        lookTarget: canvas,
+        getTarget: () => movementController,
+        initialMode: moveMode,
+      });
+    }
     // Dev builds only: lets screenshot scripts place the camera
     if (import.meta.env.DEV) {
       (window as unknown as { __movementController?: FirstPersonMovementController }).__movementController = movementController;
@@ -394,6 +431,10 @@ async function bootstrap() {
       placeTag = (x: number, z: number) => {
         if (!tagUI) return;
         if (!tagUI.selectedPoi && targetPoi) tagUI.selectPoi(targetPoi.poi_id);
+        if (!isValidTagSpot(x, z)) {
+          tagUI.showToast('That spot is outside the room');
+          return;
+        }
         const moved = tagUI.moveSelected(x, z);
         if (moved && targetPoi?.poi_id === moved.poi_id) {
           planRoute(moved, false);
@@ -412,39 +453,59 @@ async function bootstrap() {
           navUI.showPoiCard(poi, getDistanceToPoi(poi));
         }
       };
+      // A tag may sit anywhere inside the room footprint, on or next to the floor map (walls,
+      // windows and furniture tops are fine), but never out in the void past the walls.
+      const TAG_FLOOR_REACH_M = 1.0;
+      const isValidTagSpot = (x: number, z: number): boolean => {
+        const b = manifest.bounds;
+        if (x < b.minX || x > b.maxX || z < b.minZ || z > b.maxZ) return false;
+        return planner ? planner.nearestFreeCell(x, z, TAG_FLOOR_REACH_M) >= 0 : true;
+      };
+
       minimap.onDragPoi((poi, x, z, done) => {
-        if (done) dropTag(poi, x, z);
-        else {
+        // Off the map: the dot stays at its last good spot
+        if (isValidTagSpot(x, z)) {
           poi.position.x = x;
           poi.position.z = z;
         }
+        if (done) dropTag(poi, poi.position.x, poi.position.z);
       });
 
-      const floorRay = new THREE.Raycaster();
-      const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-      const floorAt = (clientX: number, clientY: number): THREE.Vector3 | null => {
+      // Labels float at poi.position.y (about 1.2 m), so a drag must slide the tag along that
+      // height. Projecting onto the floor (y = 0) instead sends the ray far past the label, often
+      // outside the room, which made tags fly off towards the horizon and disappear.
+      const dragRay = new THREE.Raycaster();
+      const dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+      const pointOnPlane = (clientX: number, clientY: number, y: number): THREE.Vector3 | null => {
         const rect = canvas.getBoundingClientRect();
         const ndc = new THREE.Vector2(
           ((clientX - rect.left) / rect.width) * 2 - 1,
           -((clientY - rect.top) / rect.height) * 2 + 1
         );
-        floorRay.setFromCamera(ndc, camera);
-        const hit = floorRay.ray.intersectPlane(floorPlane, new THREE.Vector3());
-        return hit && hit.distanceTo(camera.position) <= 30 ? hit : null;
+        dragRay.setFromCamera(ndc, camera);
+        dragPlane.constant = -y;
+        return dragRay.ray.intersectPlane(dragPlane, new THREE.Vector3());
       };
       routeView.onPillPointerDown((poi, down) => {
         if (!tagUI?.adjustMode) return false;
         const start = { x: down.clientX, y: down.clientY, px: poi.position.x, pz: poi.position.z };
+        const labelY = poi.position.y ?? manifest.eye_height_m;
+        // Keep the spot you grabbed under your finger, so the tag doesn't jump on the first move
+        const grab = pointOnPlane(down.clientX, down.clientY, labelY);
+        const grabOffset = grab ? { x: start.px - grab.x, z: start.pz - grab.z } : { x: 0, z: 0 };
         let moved = false;
         const onMove = (e: PointerEvent) => {
           if (e.pointerId !== down.pointerId) return;
           if (!moved && Math.hypot(e.clientX - start.x, e.clientY - start.y) < 4) return;
           moved = true;
           document.body.style.cursor = 'grabbing';
-          const hit = floorAt(e.clientX, e.clientY);
-          if (hit) {
-            poi.position.x = hit.x;
-            poi.position.z = hit.z;
+          const hit = pointOnPlane(e.clientX, e.clientY, labelY);
+          if (!hit) return; // pointing above the label's height: hold the last good spot
+          const x = hit.x + grabOffset.x;
+          const z = hit.z + grabOffset.z;
+          if (isValidTagSpot(x, z)) {
+            poi.position.x = x;
+            poi.position.z = z;
           }
         };
         const onUp = (e: PointerEvent) => {
@@ -464,7 +525,7 @@ async function bootstrap() {
           }
           routeView.suppressNextClick();
           if (poi.position.x === start.px && poi.position.z === start.pz) {
-            tagUI?.showToast('Drag onto the floor to move a tag');
+            tagUI?.showToast('Drag inside the room to move a tag');
             return;
           }
           dropTag(poi, poi.position.x, poi.position.z);
@@ -530,6 +591,8 @@ async function bootstrap() {
     // Pointer Lock click-to-lock
     canvas.addEventListener('click', () => {
       if (tagUI?.isFormOpen) return;
+      // Touch screens look by dragging (iOS has no pointer lock)
+      if (touchControls || typeof canvas.requestPointerLock !== 'function') return;
       if (document.pointerLockElement !== canvas) {
         canvas.requestPointerLock();
       }
@@ -552,13 +615,14 @@ async function bootstrap() {
       ui.showProgress(1.0);
     } else {
       // 7. Load Scene Asset (with lite fallback support)
-      // Laptops and desktops load the full scene directly. Touch devices load lite (about
-      // 12% of the full download) and stay on it. ?quality=full or ?quality=lite overrides.
+      // Laptops and desktops load the full scene directly. Touch devices open fast on lite (about
+      // 12% of the full download), then swap to the full scene once the frame rate shows they can
+      // take it (and drop back to lite if it gets slow). ?quality=full or ?quality=lite overrides.
       const quality = searchParams.get('quality');
       const hasLite = Boolean(manifest.assets.lite && manifest.asset_table[manifest.assets.lite]);
       const isTouch = window.matchMedia?.('(pointer: coarse)').matches ?? false;
       const liteFirst = hasLite && quality !== 'full' && (isTouch || quality === 'lite');
-      const upgradeToFull = liteFirst && quality !== 'lite' && !isTouch;
+      const upgradeToFull = liteFirst && quality !== 'lite';
 
       const loadedAsset = await loadSceneSplatAsset(manifest, {
         preferLite: liteFirst,
@@ -606,37 +670,64 @@ async function bootstrap() {
       let upgradeState: 'waiting' | 'loading' | 'done' = upgradeToFull ? 'waiting' : 'done';
       let slowSamples = 0;
       let fastSamples = 0;
+      const showQuality = () => {
+        if (!hasLite) return; // one asset only: nothing to switch
+        ui.setQuality(upgradeState === 'loading' ? 'loading' : onFull ? 'hd' : 'lite');
+      };
+      // Fetches the full scene and swaps it in. forced = the viewer tapped HD (no fallback to lite
+      // from the FPS check after that, so their choice sticks)
+      let userChoseQuality = false;
+      const loadFull = () => {
+        if (upgradeState === 'loading' || onFull) return;
+        upgradeState = 'loading';
+        showQuality();
+        const fullAsset = manifest.asset_table[manifest.assets.full];
+        fetchAssetWithVerification(fullAsset)
+          .then(buffer => (upgradeState === 'loading' ? renderer.load({ ...fullAsset, buffer }, () => {}) : undefined))
+          .then(() => {
+            if (upgradeState === 'loading') {
+              onFull = true;
+              upgradeState = 'done';
+              // Full detail deserves full resolution again
+              renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+              console.info('[Viewer] Full-quality scene loaded');
+            }
+            showQuality();
+          })
+          .catch(err => {
+            upgradeState = 'done';
+            showQuality();
+            console.warn('[Viewer] Staying on the lite scene; full scene failed to load:', err);
+          });
+      };
+      const loadLite = () => {
+        if (!onFull || !hasLite) return;
+        onFull = false;
+        upgradeState = 'done';
+        void renderer.load(liteRef, () => {});
+        showQuality();
+      };
+      onQualityToggle = () => {
+        userChoseQuality = true;
+        if (onFull) loadLite();
+        else loadFull();
+      };
+      showQuality();
       adaptQuality = (fps: number) => {
         slowSamples = fps < 20 ? slowSamples + 1 : 0;
-        fastSamples = fps >= 35 ? fastSamples + 1 : 0;
+        fastSamples = fps >= 30 ? fastSamples + 1 : 0;
         if (slowSamples >= 6) {
           slowSamples = 0;
           const floor = onFull && hasLite ? 0.75 : 0.5;
           if (renderer.pixelRatio > floor) {
             renderer.setPixelRatio(renderer.pixelRatio > 1 ? 1 : Math.max(floor, renderer.pixelRatio * 0.75));
             console.info(`[Viewer] Slow device: render scale ${renderer.pixelRatio.toFixed(2)}`);
-          } else if (onFull && hasLite) {
-            onFull = false;
-            upgradeState = 'done';
-            void renderer.load(liteRef, () => {});
+          } else if (onFull && hasLite && !userChoseQuality) {
+            loadLite();
             console.info('[Viewer] Slow device: back to the lite scene');
           }
-        } else if (fastSamples >= 4 && upgradeState === 'waiting' && renderer.pixelRatio >= 1) {
-          upgradeState = 'loading';
-          const fullAsset = manifest.asset_table[manifest.assets.full];
-          fetchAssetWithVerification(fullAsset)
-            .then(buffer => (upgradeState === 'loading' ? renderer.load({ ...fullAsset, buffer }, () => {}) : undefined))
-            .then(() => {
-              if (upgradeState === 'loading') {
-                onFull = true;
-                upgradeState = 'done';
-                console.info('[Viewer] Full-quality scene loaded');
-              }
-            })
-            .catch(err => {
-              upgradeState = 'done';
-              console.warn('[Viewer] Staying on the lite scene; full scene failed to load:', err);
-            });
+        } else if (fastSamples >= 4 && upgradeState === 'waiting' && !userChoseQuality) {
+          loadFull();
         }
       };
     }

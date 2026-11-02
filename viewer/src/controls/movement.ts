@@ -190,6 +190,9 @@ export class FirstPersonMovementController implements MovementController {
   };
 
   private _cleanupFns: (() => void)[] = [];
+  /** On-screen joystick (phones): forward and right in -1..1, added to the keys */
+  private _analog = { forward: 0, right: 0 };
+  private _analogSprint = false;
   private _rise = false;
   private _sink = false;
   private _heightOffset = 0;
@@ -403,7 +406,36 @@ export class FirstPersonMovementController implements MovementController {
     return this._collision;
   }
 
+  /**
+   * Touch joystick input: forward and right in -1..1 (length up to 1). The stick's tilt sets the
+   * speed, from a slow creep up to walking pace; sprint = true runs (thumb pulled past the ring).
+   */
+  setAnalog(forward: number, right: number, sprint = false): void {
+    const len = Math.hypot(forward, right);
+    const k = len > 1 ? 1 / len : 1;
+    const f = forward * k, r = right * k;
+    if (this._autoWalk && len > 0.2) this.stopAutoWalk(true);
+    this._analog.forward = f;
+    this._analog.right = r;
+    this._analogSprint = sprint && len > 0.2;
+  }
+
+  /** Touch buttons for Free roam up / down (same as holding E / Q) */
+  setVertical(rise: boolean, sink: boolean): void {
+    this._rise = rise;
+    this._sink = sink;
+  }
+
+  /** Touch button for jump in Walk mode (same as Space) */
+  setJump(held: boolean): void {
+    this._jumpHeld = held;
+    if (!held) this._jumpArmed = true;
+  }
+
   clearKeys(): void {
+    this._analog.forward = 0;
+    this._analog.right = 0;
+    this._analogSprint = false;
     this._keys.forward = false;
     this._keys.backward = false;
     this._keys.left = false;
@@ -691,8 +723,21 @@ export class FirstPersonMovementController implements MovementController {
     if (this._keys.right) moveRight += 1;
     if (this._keys.left) moveRight -= 1;
 
+    // Joystick: its tilt scales the speed (keys always go full walking pace)
+    const keyMoving = moveForward !== 0 || moveRight !== 0;
+    const stick = Math.hypot(this._analog.forward, this._analog.right);
+    let speedScale = 1;
+    let stickSprint = false;
+    if (!keyMoving && stick > 0.08) {
+      moveForward = this._analog.forward;
+      moveRight = this._analog.right;
+      speedScale = Math.min(1, 0.25 + stick);
+      stickSprint = this._analogSprint;
+    }
+
     const isMoving = moveForward !== 0 || moveRight !== 0;
-    const targetSpeed = isMoving ? (this._keys.sprint ? SPRINT_SPEED : WALK_SPEED) : 0;
+    const sprinting = this._keys.sprint || stickSprint;
+    const targetSpeed = isMoving ? (sprinting ? SPRINT_SPEED : WALK_SPEED * speedScale) : 0;
 
     // 0.15s smoothing filter (walk mode: slower speed-up, quicker stop)
     if (effectiveDt > 0) {
@@ -788,7 +833,7 @@ export class FirstPersonMovementController implements MovementController {
     if (dt <= 0) return;
     const speed = moved / dt;
     const air = this.airborne;
-    const sprinting = this._keys.sprint && speed > WALK_SPEED * 1.1;
+    const sprinting = speed > WALK_SPEED * 1.1;
     // No bob or footsteps in the air: the bob fades out during a jump
     const targetAmp = air ? 0 : Math.min(speed / WALK_SPEED, 1.3);
     this._bobAmp += (targetAmp - this._bobAmp) * (1 - Math.exp(-dt / 0.12));

@@ -37,6 +37,12 @@ export interface MinimapMapping {
  * Calculates world-to-pixel linear mapping for a NavGrid with North-up orientation.
  * Ensures aspect ratio is preserved and the grid is centered with padding.
  */
+/** Phone-sized screen: narrow portrait, or a short touch screen in landscape */
+export function isPhone(): boolean {
+  if (typeof window === 'undefined' || !window.matchMedia) return false;
+  return window.matchMedia('(max-width: 760px), (pointer: coarse) and (max-height: 520px)').matches;
+}
+
 export function calculateMinimapMapping(
   grid: NavGrid,
   canvasWidth: number,
@@ -108,6 +114,8 @@ export class MinimapUI {
   private _grid: NavGrid | null = null;
   private _mapping: MinimapMapping | null = null;
   private _size = 220;
+  /** Canvas height; equals _size except on phones, where the map is cropped to the room's shape */
+  private _height = 220;
   private _isVisible = true;
 
   private _lastPois: POI[] = [];
@@ -228,12 +236,13 @@ export class MinimapUI {
     const dpr = window.devicePixelRatio || 1;
     const canvas = this._canvas;
     const cssSize = this._size;
+    const cssH = this._height;
 
-    if (canvas.width !== Math.round(cssSize * dpr) || canvas.height !== Math.round(cssSize * dpr)) {
+    if (canvas.width !== Math.round(cssSize * dpr) || canvas.height !== Math.round(cssH * dpr)) {
       canvas.width = Math.round(cssSize * dpr);
-      canvas.height = Math.round(cssSize * dpr);
+      canvas.height = Math.round(cssH * dpr);
       canvas.style.width = `${cssSize}px`;
-      canvas.style.height = `${cssSize}px`;
+      canvas.style.height = `${cssH}px`;
     }
 
     const ctx = this._ctx;
@@ -242,7 +251,7 @@ export class MinimapUI {
 
     // Clear background
     ctx.fillStyle = THEME.mapBg;
-    ctx.fillRect(0, 0, cssSize, cssSize);
+    ctx.fillRect(0, 0, cssSize, cssH);
 
     const m = this._mapping;
 
@@ -344,6 +353,13 @@ export class MinimapUI {
     // The large tag-mode map only fits beside the Places panel on wide screens
     if (this._isTagMode && window.innerWidth >= 900) {
       this._size = 360;
+    } else if (isPhone()) {
+      // Phones: a compact map, about 45% of the screen width (portrait) or 26% (landscape)
+      // Phones: compact. Portrait about 42% of the width; landscape limited by the short height
+      const portrait = window.innerHeight >= window.innerWidth;
+      this._size = portrait
+        ? Math.round(Math.max(130, Math.min(180, window.innerWidth * 0.42)))
+        : Math.round(Math.max(110, Math.min(170, window.innerHeight * 0.5, window.innerWidth * 0.2)));
     } else if (window.innerWidth < 640) {
       this._size = 140;
     } else {
@@ -356,8 +372,16 @@ export class MinimapUI {
   }
 
   private _updateMapping(): void {
-    if (!this._grid) return;
-    this._mapping = calculateMinimapMapping(this._grid, this._size, this._size, 10);
+    if (!this._grid) {
+      this._height = this._size;
+      return;
+    }
+    const g = this._grid;
+    // Phones: crop the empty bands above and below a wide room so the map covers less of the view
+    this._height = isPhone()
+      ? Math.round(Math.max(80, Math.min(this._size, (this._size - 16) * (g.height / Math.max(1, g.width)) + 16)))
+      : this._size;
+    this._mapping = calculateMinimapMapping(g, this._size, this._height, 8);
   }
 
   private _cacheGridRender(grid: NavGrid): void {
@@ -528,6 +552,16 @@ export class MinimapUI {
       @media (max-width: 760px) {
         .namma-minimap-container {
           top: calc(var(--ns-hud-top) + 2 * var(--ns-target) + 40px);
+          padding: 3px;
+        }
+      }
+      /* Landscape phones: one top row, so the map sits right under it */
+      @media (pointer: coarse) and (max-height: 520px) {
+        .namma-minimap-container {
+          top: calc(var(--ns-hud-top) + var(--ns-target) + 14px);
+          bottom: auto;
+          padding: 3px;
+          transform-origin: top right;
         }
       }
     `;

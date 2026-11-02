@@ -200,6 +200,19 @@ export class NavUI {
     bottomStack.append(this._poiCard, this._routeCard);
     this._root.appendChild(bottomStack);
 
+    // Publish how tall the bottom cards are (--ns-nav-stack-h), so the touch joystick sits above them
+    if (typeof ResizeObserver !== 'undefined') {
+      const publish = () => {
+        const stackH = bottomStack.getBoundingClientRect().height; // 0 while it is display: contents
+        const h = stackH > 0 ? stackH : this._poiCard.offsetHeight;
+        document.documentElement.style.setProperty('--ns-nav-stack-h', `${Math.round(h)}px`);
+      };
+      const ro = new ResizeObserver(publish);
+      ro.observe(this._poiCard);
+      ro.observe(this._routeCard);
+      window.addEventListener('resize', publish);
+    }
+
     ensureTokens();
     this._injectStyles();
     parent.appendChild(this._root);
@@ -940,6 +953,65 @@ export class NavUI {
           right: var(--ns-hud-right);
           width: auto;
           bottom: calc(var(--ns-hud-bottom) + var(--ns-sheet-h, 0px));
+        }
+        .nav-poi-card { padding: var(--ns-space-2) var(--ns-space-2) var(--ns-space-2) var(--ns-space-3); gap: 6px; }
+      }
+
+      /* Phones: one bottom panel at a time. While a place card is open it already has Navigate,
+         so the route bar steps aside instead of stacking under it (it comes back when the card closes) */
+      @media (max-width: 900px), (pointer: coarse) and (max-height: 520px) {
+        .nav-bottom-stack:has(> .nav-poi-card:not(.hidden)) > .nav-route-card { display: none; }
+      }
+
+      /* Phones: a slim place card, two rows: name, distance, close / Navigate, Look.
+         Category, description and aliases are left out so the card covers as little of the room as possible */
+      @media (max-width: 760px), (pointer: coarse) and (max-width: 900px), (pointer: coarse) and (max-height: 520px) {
+        .nav-poi-card {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) auto auto;
+          align-items: center;
+          column-gap: var(--ns-space-2);
+          row-gap: 6px;
+          padding: 6px 6px 8px 12px;
+        }
+        .nav-poi-card.hidden { display: none; }
+        .nav-poi-card-header, .nav-poi-card-meta { display: contents; }
+        .nav-poi-card-title {
+          grid-column: 1; grid-row: 1;
+          font-size: var(--ns-fs-md);
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .nav-poi-card-cat { display: none; }
+        .nav-poi-card-dist { grid-column: 2; grid-row: 1; white-space: nowrap; }
+        .nav-poi-card-close { grid-column: 3; grid-row: 1; width: 32px; height: 32px; }
+        .nav-poi-card-desc, .nav-poi-card-aliases { display: none !important; }
+        .nav-poi-card-actions { grid-column: 1 / -1; grid-row: 2; margin-top: 0; padding-right: 0; }
+        .nav-poi-btn { min-height: 38px; font-size: var(--ns-fs-xs); }
+      }
+
+      /* Landscape phones: search shares the top row with the HUD; the bottom panel is centred
+         between the joystick (left) and the Up / Down buttons (right) */
+      @media (pointer: coarse) and (max-height: 520px) {
+        .nav-search-container { width: min(300px, 36vw); }
+        .nav-results-list { max-height: calc(100dvh - var(--ns-hud-top) - var(--ns-target) - 32px); }
+        .nav-bottom-stack {
+          position: absolute;
+          left: 50%;
+          right: auto;
+          transform: translateX(-50%);
+          bottom: var(--ns-hud-bottom);
+          z-index: 90;
+          display: flex;
+          flex-direction: column;
+          gap: var(--ns-space-2);
+          width: min(340px, calc(100% - 2 * (var(--ns-hud-left) + 120px)));
+          pointer-events: none;
+        }
+        .nav-route-card, .nav-poi-card {
+          position: static;
+          transform: none;
+          width: auto;
+          max-width: none;
         }
         .nav-poi-card { padding: var(--ns-space-2) var(--ns-space-2) var(--ns-space-2) var(--ns-space-3); gap: 6px; }
       }

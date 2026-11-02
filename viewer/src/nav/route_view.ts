@@ -111,6 +111,7 @@ export class RouteView {
   private _pois: POI[] = [];
   private _highlightId: string | null = null;
   private readonly _labelContainer: HTMLElement;
+  private _labelsHidden = false;
   private readonly _labelElements = new Map<string, HTMLElement>();
   private readonly _pickCallbacks: ((poi: POI) => void)[] = [];
   private readonly _pillDownCallbacks: ((poi: POI, e: PointerEvent) => boolean)[] = [];
@@ -162,6 +163,15 @@ export class RouteView {
   suppressNextClick(): void {
     this._suppressClick = true;
     setTimeout(() => (this._suppressClick = false), 0);
+  }
+
+  /** Hides every place label except the current destination (the Tags button) */
+  setLabelsVisible(visible: boolean): void {
+    this._labelsHidden = !visible;
+  }
+
+  get labelsVisible(): boolean {
+    return !this._labelsHidden;
   }
 
   /** Grab cursor on labels while tags can be dragged */
@@ -373,6 +383,10 @@ export class RouteView {
       if (!el) continue;
 
       const isHighlight = poi.poi_id === this._highlightId;
+      if (this._labelsHidden && !isHighlight) {
+        el.style.display = 'none';
+        continue;
+      }
       const proj = projectLabel(poi.position, camera, w, h, 12, isHighlight);
 
       if (proj.visible) {
