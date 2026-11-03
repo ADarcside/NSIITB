@@ -391,6 +391,8 @@ const ICON_PATHS: Record<string, string> = {
   walk: '<path d="M5 12h12M13 6l6 6-6 6"/>',
   stop: '<rect x="6" y="6" width="12" height="12" rx="2"/>',
   tag: '<path d="M3 12V4h8l10 10-8 8L3 12z"/><circle cx="7.5" cy="8.5" r="1.5"/>',
+  users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14a6.5 6.5 0 0 1 3.5 6"/>',
+  more: '<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>',
   tagOff: '<path d="M3 12V4h8l10 10-8 8L3 12z"/><circle cx="7.5" cy="8.5" r="1.5"/><path d="M3 3l18 18"/>',
 };
 

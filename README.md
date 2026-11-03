@@ -59,6 +59,12 @@ VITE_SAVE_SOURCE='ADarcside/NSIITB@round-2:sample/test-capture/pois.json' \
 scripts/build_site.sh <scene_dir> site
 ```
 
+### Extras: Walk mode game feel and Play with friends
+
+- **Walk mode feel** (`F` switches to Walk): sprint (Shift, double-tap for a short burst), slide (C while sprinting), crouch (C or Ctrl), climb onto low furniture (Space facing it), zoom (right mouse), plus an arrival ring when **Take me there** finishes. Head bob, tilt, mouse sensitivity and field of view are in Help. Free roam stays the default and is unchanged.
+- **Play with friends**: the gold button in the top bar opens multiplayer after a short warning (your mic turns on in a room, and anyone with the invite link can join). Pick a cartoon character, create a room, and send the invite link. Up to 2 to 6 people (it depends on the room's walkable floor area) walk the same scene, see each other move, and talk by voice. **Go** next to a friend's name draws the Round 2 path to them, and **G** points at a spot for everyone. **Leave** goes back to exploring alone. Reset and the collision mode sit in the **…** menu.
+- The relay is a small Cloudflare Worker that passes messages between the people in a room and stores nothing. Voice goes browser to browser. The multiplayer code only downloads after you press Continue. Setup, local testing and the build switches (`VITE_MP_URL`, and `VITE_MP_BUTTON=0` to hide the button) are in [multiplayer/README.md](multiplayer/README.md).
+
 The details are in [docs/round2-plan.md](docs/round2-plan.md). The data format is in [pipeline/schemas/pois.schema.json](pipeline/schemas/pois.schema.json), the pathfinder in [viewer/src/nav/astar.ts](viewer/src/nav/astar.ts), and search in [viewer/src/nav/search.ts](viewer/src/nav/search.ts).
 
 ## How a room becomes a link
@@ -300,6 +306,7 @@ On Windows, run the Python parts inside WSL and open the repo from WSL in VS Cod
 | `pipeline/config/` | `default.yaml`, `room.yaml` (thresholds and stage settings; the hash is recorded in every report) |
 | `pipeline/schemas/` | JSON schemas for `capture.json`, `manifest.json` and the navigation grid |
 | `viewer/` | the browser viewer (TypeScript, Three.js, Spark, Vite) |
+| `multiplayer/` | the room relay (Cloudflare Worker) and the editable avatar `.blend` files; `tools/avatars/` builds the characters |
 | `tests/` | pytest and Vitest suites; `tests/fixtures/` has template JSON files |
 | `sample/test-capture/` | sample data: the published K-720 scene (manifest, full and lite SPZ, walkable grid), see its README |
 | `docs/sop.md`, `docs/field-checklist.md` | how to capture |

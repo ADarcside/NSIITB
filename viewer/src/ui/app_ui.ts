@@ -89,6 +89,12 @@ export interface AppUIOptions {
   /** Scene quality chip (Lite / HD): tap to switch */
   onQualityToggle?: () => void;
   initialLabelsVisible?: boolean;
+  /**
+   * Round 2 page: a "Play with friends" button opens multiplayer. Reset and the collision mode then
+   * move into a "More" menu so the top bar stays one tidy row. Off: the top bar is exactly as before.
+   */
+  showFriendsButton?: boolean;
+  onFriendsClick?: () => void;
 }
 
 export class VanillaAppUI implements AppUI {
@@ -111,6 +117,7 @@ export class VanillaAppUI implements AppUI {
   private readonly _modeValue: HTMLElement;
   private readonly _moveValue: HTMLElement;
   private readonly _resetButton: HTMLElement;
+  private _friendsBtn: HTMLButtonElement | null = null;
   private readonly _moveButton: HTMLElement;
   private readonly _volumeBox: HTMLElement;
   private readonly _volumeIcon: HTMLElement;
@@ -198,7 +205,8 @@ export class VanillaAppUI implements AppUI {
     modeBadge.addEventListener('click', () => {
       this._onModeToggle?.();
     });
-    statusGroup.appendChild(modeBadge);
+    const useMenu = Boolean(options.showFriendsButton);
+    if (!useMenu) statusGroup.appendChild(modeBadge);
 
     this._moveButton = document.createElement('button');
     this._moveButton.id = 'move-mode-btn';
@@ -245,18 +253,20 @@ export class VanillaAppUI implements AppUI {
     const actionGroup = document.createElement('div');
     actionGroup.className = 'hud-group';
 
-    const makeAction = (id: string, iconName: string, label: string, key: string, title: string) => {
+    const makeAction = (id: string, iconName: string, label: string, key: string, title: string, parentEl: HTMLElement = actionGroup) => {
       const btn = document.createElement('button');
       btn.id = id;
       btn.className = 'hud-button ns-press';
       btn.title = title;
       btn.setAttribute('aria-label', `${label} (${key})`);
       btn.innerHTML = `${icon(iconName, 16)}<span class="hud-label">${label}</span><kbd class="ns-kbd" aria-hidden="true">${key}</kbd>`;
-      actionGroup.appendChild(btn);
+      parentEl.appendChild(btn);
       return btn;
     };
 
-    this._resetButton = makeAction('reset-btn', 'reset', 'Reset', 'R', 'Reset camera pose (R)');
+    // Round 2 page: Reset and Mode live in the "More" menu (built below)
+    const menuList = document.createElement('div');
+    this._resetButton = makeAction('reset-btn', 'reset', 'Reset', 'R', 'Reset camera pose (R)', useMenu ? menuList : actionGroup);
     this._resetButton.addEventListener('click', () => {
       this._onReset?.();
     });
@@ -279,6 +289,61 @@ export class VanillaAppUI implements AppUI {
     this._helpBtn.setAttribute('aria-controls', 'help-overlay');
     this._helpBtn.setAttribute('aria-expanded', 'false');
     this._helpBtn.addEventListener('click', () => this.toggleHelp());
+
+    if (useMenu) {
+      // "More" menu: Reset (R) and the collision mode (Ghost / Grid), same buttons and ids as before
+      const more = document.createElement('div');
+      more.className = 'hud-more';
+      const moreBtn = document.createElement('button');
+      moreBtn.id = 'more-menu-btn';
+      moreBtn.className = 'hud-button ns-press';
+      moreBtn.title = 'More options';
+      moreBtn.setAttribute('aria-label', 'More options');
+      moreBtn.setAttribute('aria-haspopup', 'true');
+      moreBtn.setAttribute('aria-expanded', 'false');
+      moreBtn.innerHTML = icon('more', 16);
+      menuList.className = 'hud-menu hidden';
+      menuList.setAttribute('role', 'menu');
+      modeBadge.title = 'Collision mode: Ghost walks through everything, Grid stops at walls';
+      menuList.appendChild(modeBadge);
+      for (const item of [this._resetButton, modeBadge]) item.setAttribute('role', 'menuitem');
+      const setOpen = (open: boolean) => {
+        menuList.classList.toggle('hidden', !open);
+        moreBtn.setAttribute('aria-expanded', String(open));
+      };
+      moreBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        moreBtn.blur();
+        setOpen(menuList.classList.contains('hidden'));
+      });
+      menuList.addEventListener('click', e => {
+        e.stopPropagation();
+        if (e.target instanceof Element && e.target.closest('#reset-btn')) setOpen(false);
+      });
+      document.addEventListener('click', () => setOpen(false));
+      window.addEventListener('keydown', e => {
+        if (e.key === 'Escape') setOpen(false);
+      });
+      more.append(moreBtn, menuList);
+      actionGroup.appendChild(more);
+
+      // Its own pill, so it reads as the way into multiplayer
+      const friendsGroup = document.createElement('div');
+      friendsGroup.className = 'hud-group hud-friends';
+      const friendsBtn = document.createElement('button');
+      friendsBtn.id = 'friends-btn';
+      friendsBtn.className = 'hud-button hud-friends-btn ns-press';
+      friendsBtn.title = 'Multiplayer: create a room and invite friends to walk this space with you';
+      friendsBtn.setAttribute('aria-label', 'Play with friends');
+      friendsBtn.innerHTML = `${icon('users', 16)}<span class="hud-friends-label">Play with friends</span>`;
+      friendsBtn.addEventListener('click', () => {
+        friendsBtn.blur();
+        options.onFriendsClick?.();
+      });
+      friendsGroup.appendChild(friendsBtn);
+      this._friendsBtn = friendsBtn;
+      topHud.appendChild(friendsGroup);
+    }
 
     topHud.appendChild(actionGroup);
     this._root.appendChild(topHud);
@@ -312,7 +377,7 @@ export class VanillaAppUI implements AppUI {
           <p class="ld-tip"><span class="ld-tip-tag">Tip</span><span class="ld-tip-text"></span></p>
         </div>
       </div>
-      <p class="ld-credit">Namma Space · Team NoGrass · Techfest IIT Bombay 2026, Round 2</p>
+      ${import.meta.env.VITE_MP_URL ? '' : '<p class="ld-credit">Namma Space · Team NoGrass · Techfest IIT Bombay 2026, Round 2</p>'}
     `;
     const q = (sel: string) => this._progressContainer.querySelector(sel) as HTMLElement;
     this._roomName = q('.ld-room');
@@ -353,6 +418,12 @@ export class VanillaAppUI implements AppUI {
     this._helpOverlay.id = 'help-overlay';
     this._helpOverlay.className = 'help-overlay hidden';
     const tagRow = options.isTagMode ? '<div><kbd>P</kbd></div><div>Tag mode: add place here</div>' : '';
+    // Walk game feel keys (laptops outside tag mode; tag mode keeps the plain Walk mode)
+    const feelRows = options.isTagMode ? '' : `
+          <div><kbd>Shift</kbd> <kbd>Shift</kbd></div><div>Walk: double-tap for a tactical sprint (3 s burst)</div>
+          <div><kbd>C</kbd></div><div>Walk: hold to crouch; press while sprinting to slide</div>
+          <div><kbd>Right mouse</kbd></div><div>Walk: hold to zoom in (mouse locked)</div>
+          <div><kbd>Space</kbd></div><div>Walk: facing a low bed or table, climb onto it</div>`;
     this._helpOverlay.innerHTML = `
       <div class="help-card" role="dialog" aria-modal="true" aria-labelledby="help-title">
         <h2 id="help-title">Controls & navigation</h2>
@@ -361,7 +432,7 @@ export class VanillaAppUI implements AppUI {
           <div><kbd>Shift</kbd></div><div>Fast Walk (2.5 m/s)</div>
           <div><kbd>F</kbd></div><div>Switch Walk (person height, game feel) / Free roam</div>
           <div><kbd>E</kbd> / <kbd>Q</kbd></div><div>Free roam: fly up / down (over or between furniture; R walks again)</div>
-          <div><kbd>Space</kbd></div><div>Walk: jump</div>
+          <div><kbd>Space</kbd></div><div>Walk: jump</div>${feelRows}
           <div><kbd>M</kbd></div><div>Walk: footstep sound on / off (slider sets the volume)</div>
           <div><kbd>/</kbd></div><div>Search places</div>
           <div><kbd>Esc</kbd></div><div>Close search / release mouse</div>
@@ -412,6 +483,11 @@ export class VanillaAppUI implements AppUI {
   setMode(mode: 'Ghost' | 'Grid'): void {
     this._mode = mode;
     this._modeValue.textContent = this._mode;
+  }
+
+  /** Hides the "Play with friends" button while the multiplayer lobby or a room is open */
+  setFriendsButtonVisible(visible: boolean): void {
+    this._friendsBtn?.closest('.hud-friends')?.classList.toggle('hidden', !visible);
   }
 
   setMoveMode(label: string): void {
@@ -675,7 +751,33 @@ export class VanillaAppUI implements AppUI {
         cursor: pointer;
       }
 
+      .hud-more { position: relative; display: flex; }
+      .hud-menu {
+        position: absolute;
+        top: calc(100% + 8px);
+        right: -3px;
+        display: grid;
+        gap: 2px;
+        min-width: 180px;
+        padding: 4px;
+        background: var(--ns-surface-strong);
+        backdrop-filter: var(--ns-blur);
+        -webkit-backdrop-filter: var(--ns-blur);
+        border: 1px solid var(--ns-border);
+        border-radius: var(--ns-radius-lg);
+        box-shadow: var(--ns-shadow);
+      }
+      .hud-menu .hud-chip, .hud-menu .hud-button { justify-content: flex-start; width: 100%; }
+      .hud-menu .hud-button .ns-kbd { margin-left: auto; }
+      .hud-menu .hud-label { display: inline !important; }
+      .hud-friends { padding: 3px; border-color: var(--ns-accent); }
+      .hud-friends-btn { color: var(--ns-accent); padding: 0 12px; }
+      .hud-friends-btn .ns-icon { flex: none; }
+
       /* Narrow desktop and tablet: action buttons go icon-only so search and HUD fit one row */
+      @media (max-width: 900px) {
+        .hud-friends-label { display: none; }
+      }
       @media (max-width: 1100px) {
         .hud-label { display: none; }
         .hud-button { padding: 0 8px; }

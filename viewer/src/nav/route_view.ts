@@ -3,6 +3,8 @@
  * Renders the active walkable navigation path as an animated cyan ribbon with a pulsing goal ring,
  * and projects POI labels as HTML pills over the canvas.
  * Under prefers-reduced-motion the ribbon appears at once and the ring and dashes stay still.
+ * Walk game feel (setFeel(true)): the ribbon draws in faster, the chevrons flow faster, and
+ * playArrival() pulses a ring outward on the floor when you reach the place.
  */
 
 import * as THREE from 'three';
@@ -121,7 +123,11 @@ export class RouteView {
   private _fullPoints: Point2[] | null = null;
   private _isGrowing = false;
   private _growElapsed = 0;
-  private readonly _growDuration = 0.5;
+  private _growDuration = 0.5;
+  /** Chevron flow speed (texture repeats per second) */
+  private _flowSpeed = 1.4;
+  private _arrivalMesh: THREE.Mesh | null = null;
+  private _arrivalT = 0;
   private readonly _reduceMotion: MediaQueryList | null;
 
   constructor(scene: THREE.Scene, container?: HTMLElement) {
@@ -163,6 +169,40 @@ export class RouteView {
   suppressNextClick(): void {
     this._suppressClick = true;
     setTimeout(() => (this._suppressClick = false), 0);
+  }
+
+  /** Walk game feel: faster draw-in and chevron flow (off = the original timings) */
+  setFeel(on: boolean): void {
+    this._growDuration = on ? 0.3 : 0.5;
+    this._flowSpeed = on ? 2.4 : 1.4;
+  }
+
+  /** A gold ring that spreads out on the floor and fades (about 0.8 s); skipped under reduced motion */
+  playArrival(at: Point2): void {
+    if (this._reduceMotion?.matches) return;
+    this._clearArrival();
+    const mat = new THREE.MeshBasicMaterial({
+      color: THEME.gold,
+      transparent: true,
+      opacity: 0.9,
+      depthTest: false,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    this._arrivalMesh = new THREE.Mesh(new THREE.RingGeometry(0.3, 0.36, 48), mat);
+    this._arrivalMesh.rotation.x = -Math.PI / 2;
+    this._arrivalMesh.position.set(at.x, 0.03, at.z);
+    this._arrivalMesh.renderOrder = 11;
+    this._arrivalT = 0;
+    this._scene.add(this._arrivalMesh);
+  }
+
+  private _clearArrival(): void {
+    if (!this._arrivalMesh) return;
+    this._scene.remove(this._arrivalMesh);
+    this._arrivalMesh.geometry.dispose();
+    (this._arrivalMesh.material as THREE.Material).dispose();
+    this._arrivalMesh = null;
   }
 
   /** Hides every place label except the current destination (the Tags button) */
@@ -362,7 +402,17 @@ export class RouteView {
       }
     } else if (this._ribbonMesh && !this._reduceMotion?.matches) {
       // Animate path dashes towards goal
-      this._texture.offset.y -= 1.4 * dtS;
+      this._texture.offset.y -= this._flowSpeed * dtS;
+    }
+
+    // Arrival ring: spread out to about 4x and fade
+    if (this._arrivalMesh) {
+      this._arrivalT += dtS;
+      const k = Math.min(1, this._arrivalT / 0.8);
+      const scale = 1 + 3 * (1 - (1 - k) * (1 - k));
+      this._arrivalMesh.scale.set(scale, scale, 1);
+      (this._arrivalMesh.material as THREE.MeshBasicMaterial).opacity = 0.9 * (1 - k);
+      if (k >= 1) this._clearArrival();
     }
 
     // Pulse goal ring
@@ -408,6 +458,7 @@ export class RouteView {
 
   dispose(): void {
     this.setPath(null);
+    this._clearArrival();
     this._ribbonMat.dispose();
     this._texture.dispose();
     this._labelContainer.remove();

@@ -98,6 +98,8 @@ export class GridCollisionProvider implements CollisionProvider {
     this._bytes = decodeBase64ToBytes(navgrid.free_bits_b64);
     this._bitOrderMsb = (options?.bitOrder ?? 'msb') === 'msb';
     this._layerBytes = navgrid.layers ? decodeBase64ToBytes(navgrid.layers.occupied_bits_b64) : null;
+    // Without height layers there is nothing to climb: hide topAt so Walk mode skips climbing
+    if (!this._layerBytes) (this as { topAt?: unknown }).topAt = undefined;
 
     const minX = navgrid.origin[0];
     const minZ = navgrid.origin[1];
@@ -172,6 +174,34 @@ export class GridCollisionProvider implements CollisionProvider {
 
   get flying(): boolean {
     return this._flightY !== null;
+  }
+
+  /**
+   * Top of the occupied layers at (x, z) below maxY: 0 when nothing is there, Infinity when the layer
+   * at maxY is itself occupied (something taller), else the top of the highest occupied layer.
+   * Only defined with height layers (the method is removed below when the grid has none).
+   */
+  topAt(x: number, z: number, maxY: number): number {
+    const g = this._navgrid;
+    const L = g.layers;
+    const bytes = this._layerBytes;
+    if (!L || !bytes) return 0;
+    const col = Math.floor((x - g.origin[0]) / g.cell_m);
+    const row = Math.floor((z - g.origin[1]) / g.cell_m);
+    if (col < 0 || row < 0 || col >= g.width || row >= g.height) return Infinity;
+    const n = g.width * g.height;
+    const cell = row * g.width + col;
+    const occupied = (layer: number): boolean => {
+      const bit = layer * n + cell;
+      return ((bytes[bit >> 3] >> (7 - (bit & 7))) & 1) === 1;
+    };
+    const top = Math.min(L.count - 1, Math.floor((maxY - L.y0_m) / L.dy_m));
+    if (top < 0) return 0;
+    if (occupied(top)) return Infinity;
+    for (let layer = top - 1; layer >= 0; layer--) {
+      if (occupied(layer)) return L.y0_m + (layer + 1) * L.dy_m;
+    }
+    return 0;
   }
 
   get hasLayers(): boolean {

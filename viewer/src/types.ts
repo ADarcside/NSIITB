@@ -58,6 +58,11 @@ export interface CollisionProvider {
    */
   setFlight?(eyeY: number | null): void;
   clearanceAt?(x: number, z: number, eyeY: number): number;
+  /**
+   * Optional (height layers only): height of the top of whatever stands at (x, z) below maxY
+   * (0 = bare floor), or Infinity when it is still solid at maxY. Walk mode uses it to climb onto low furniture.
+   */
+  topAt?(x: number, z: number, maxY: number): number;
 }
 
 /**

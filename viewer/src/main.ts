@@ -26,6 +26,7 @@ import { NavPlanner, type Point2 } from './nav/astar.js';
 import { validatePoiSet, PoiDraftStore } from './nav/pois.js';
 import { saveConfigFromEnv } from './nav/publish.js';
 import { TagUI } from './ui/tag_ui.js';
+import { loadFeelSettings, mountFeelSettings } from './ui/walk_feel_settings.js';
 import {
   parseSceneParam,
   fetchAndValidateManifest,
@@ -63,12 +64,15 @@ async function bootstrap() {
   let moveMode: MoveMode = searchParams.get('move') === 'walk' ? 'walk' : 'free';
   const moveLabel = (m: MoveMode) => (m === 'walk' ? 'Walk' : 'Free roam');
   const footsteps = new Footsteps();
+  // Walk game feel: laptops only, never in tag mode (tag mode and phones keep the plain Walk mode)
+  const gameFeel = !isTagMode && !isTouchDevice();
   const toggleMove = () => {
     moveMode = moveMode === 'walk' ? 'free' : 'walk';
     movementController?.setMode(moveMode);
     ui.setMoveMode(moveLabel(moveMode));
     ui.setVolumeVisible(moveMode === 'walk');
     touchControls?.setMode(moveMode);
+    routeViewRef?.setFeel(gameFeel && moveMode === 'walk');
   };
   let touchControls: TouchControls | null = null;
   window.addEventListener('keydown', (e: KeyboardEvent) => {
@@ -109,9 +113,18 @@ async function bootstrap() {
     }
   };
 
+  // Multiplayer entry. VITE_MP_BUTTON=1 (Round 2 page): a "Play with friends" button, behind a warning.
+  // VITE_MP_BUTTON=0: kill switch, no multiplayer at all. Unset: the /multiplayer/ page opens the lobby
+  // straight away, as before. Tag mode never has multiplayer.
+  const mpButtonFlag = import.meta.env.VITE_MP_BUTTON as string | undefined;
+  const mpButtonMode = !isTagMode && mpButtonFlag === '1' && Boolean(import.meta.env.VITE_MP_URL);
+  let onFriendsClick: (() => void) | null = null;
+
   const ui = new VanillaAppUI({
     isDevScene,
     isTagMode,
+    showFriendsButton: mpButtonMode,
+    onFriendsClick: () => onFriendsClick?.(),
     sceneId: sceneParam,
     initialMode: 'Ghost',
     onReset: () => {
@@ -183,10 +196,18 @@ async function bootstrap() {
     const routeView = new RouteView(renderer.scene);
     routeViewRef = routeView;
     routeView.setLabelsVisible(labelsVisible);
+    routeView.setFeel(gameFeel && moveMode === 'walk');
+    /** Walk game feel: ring on the floor and a small camera settle when you reach a place */
+    const celebrateArrival = (goal: Point2 | undefined) => {
+      if (!goal || !movementController?.feelActive) return;
+      routeView.playArrival(goal);
+      movementController.settle();
+    };
     const navUI = new NavUI();
     minimap = new MinimapUI({ isTagMode });
 
     let planner: NavPlanner | null = null;
+    let loadedGrid: NavGrid | null = null;
     let targetPoi: POI | null = null;
     let currentPathPoints: Point2[] | null = null;
     let lastPlanPose: { x: number; z: number } | null = null;
@@ -304,6 +325,7 @@ async function bootstrap() {
           navUI.setAutoWalking(false);
           if (targetPoi) {
             const arrivedName = targetPoi.name;
+            celebrateArrival(currentPathPoints?.[currentPathPoints.length - 1]);
             targetPoi = null;
             currentPathPoints = null;
             routeView.setPath(null);
@@ -341,6 +363,7 @@ async function bootstrap() {
           const gridData = JSON.parse(text) as NavGrid;
           gridProvider = new GridCollisionProvider(gridData);
           planner = new NavPlanner(gridData);
+          loadedGrid = gridData;
           minimap?.setGrid(gridData);
           if (targetPoi) {
             planRoute(targetPoi, false);
@@ -370,6 +393,13 @@ async function bootstrap() {
       },
     });
     movementController.attachDomListeners(canvas);
+    if (gameFeel) {
+      const feel = loadFeelSettings();
+      movementController.setGameFeel(true);
+      movementController.setFeelSettings(feel);
+      const helpCard = document.querySelector<HTMLElement>('#help-overlay .help-card');
+      if (helpCard) mountFeelSettings(helpCard, feel, s => movementController?.setFeelSettings(s));
+    }
     // Phones and tablets: joystick to move, drag to look, Up / Down (Free roam) or Jump (Walk)
     if (isTouchDevice()) {
       touchControls = new TouchControls({
@@ -590,6 +620,84 @@ async function bootstrap() {
     };
     void loadPois();
 
+    // 6c. Multiplayer: only on the multiplayer build (VITE_MP_URL), behind the Round 2 "Play with
+    // friends" button, or with ?room= / ?mpdemo=1. Loaded as a separate chunk, so the solo viewer
+    // never downloads or runs it until someone asks for it.
+    let multiplayer: { update: (dt: number) => void; open?: () => void } | null = null;
+    let mpStarting = false;
+    const launchMultiplayer = (embedded: boolean) => {
+      if (mpStarting) return;
+      mpStarting = true;
+      import('./net/multiplayer.js')
+        .then(mp => {
+          const { STANCE_SLIDE, STANCE_CROUCH, FLAG_AIR, FLAG_CLIMB } = mp;
+          multiplayer = mp.startMultiplayer(
+            {
+              scene: renderer.scene,
+              camera,
+              manifest,
+              sceneKey: sceneParam,
+              getPose: () => movementController!.pose,
+              getBody: () => {
+                const mc = movementController!;
+                const stance = mc.sliding ? STANCE_SLIDE : mc.crouching ? STANCE_CROUCH : 0;
+                return { e: mc.eyeAboveFeet, f: stance | (mc.airborne ? FLAG_AIR : 0) | (mc.climbing ? FLAG_CLIMB : 0) };
+              },
+              setPose: p => movementController?.setPose(p),
+              getPlanner: () => planner,
+              getGrid: () => loadedGrid,
+              getPois: () => activePois,
+              routeTo: poi => planRoute(poi, false),
+              getRouteTargetId: () => targetPoi?.poi_id ?? null,
+            },
+            undefined,
+            embedded ? { embedded: true, onActiveChange: active => ui.setFriendsButtonVisible(!active) } : {}
+          );
+          if (!multiplayer && embedded) {
+            mpStarting = false;
+            ui.setFriendsButtonVisible(true);
+          }
+        })
+        .catch(err => {
+          mpStarting = false;
+          ui.setFriendsButtonVisible(true);
+          console.warn('[Viewer] Multiplayer could not start:', err);
+        });
+    };
+
+    if (mpButtonMode) {
+      // Round 2 page: the warning comes first, then the lobby. Invite links (?room=) ask the same way.
+      let asking = false;
+      const askAndOpen = async (joinCode: string | null) => {
+        if (asking) return;
+        asking = true;
+        const { confirmMultiplayerSwitch } = await import('./ui/mp_switch.js');
+        const ok = await confirmMultiplayerSwitch({ joinCode });
+        asking = false;
+        if (!ok) {
+          if (joinCode) {
+            // Declined an invite: stay on the solo page without the room in the address bar
+            const u = new URL(window.location.href);
+            u.searchParams.delete('room');
+            window.history.replaceState(null, '', u.toString());
+          }
+          return;
+        }
+        ui.setFriendsButtonVisible(false);
+        if (multiplayer?.open) multiplayer.open();
+        else launchMultiplayer(true);
+      };
+      onFriendsClick = () => void askAndOpen(null);
+      const invite = searchParams.get('room');
+      if (invite) void askAndOpen(invite);
+    } else if (
+      mpButtonFlag === undefined &&
+      !isTagMode &&
+      (Boolean(import.meta.env.VITE_MP_URL) || searchParams.has('room') || searchParams.get('mpdemo') === '1' || searchParams.get('mp') === '1')
+    ) {
+      launchMultiplayer(false);
+    }
+
     // Pointer Lock click-to-lock
     canvas.addEventListener('click', () => {
       if (tagUI?.isFormOpen) return;
@@ -770,7 +878,8 @@ async function bootstrap() {
           pose.y + off.y,
           pose.z - Math.sin(pose.yaw) * off.side
         );
-        camera.rotation.set(pose.pitch, pose.yaw, 0, 'YXZ');
+        // Walk game feel adds a little pitch (sprint dip, climb) and roll (lean, landing shake)
+        camera.rotation.set(pose.pitch + (off.pitch ?? 0), pose.yaw, off.roll ?? 0, 'YXZ');
         if (camera.fov !== off.fov) {
           camera.fov = off.fov;
           camera.updateProjectionMatrix();
@@ -783,6 +892,7 @@ async function bootstrap() {
             const distToGoal = Math.hypot(pose.x - goal.x, pose.z - goal.z);
             if (distToGoal < 0.6) {
               const arrivedName = targetPoi.name;
+              celebrateArrival(goal);
               targetPoi = null;
               currentPathPoints = null;
               routeView.setPath(null);
@@ -806,6 +916,8 @@ async function bootstrap() {
           }
         }
       }
+
+      multiplayer?.update(dt);
 
       // Update route ribbon animation and POI label overlays
       routeView.update(camera, dt);

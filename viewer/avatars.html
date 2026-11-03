@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Avatar lineup</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #0d1220; overflow: hidden; }
+      canvas { display: block; width: 100%; height: 100%; }
+    </style>
+  </head>
+  <body>
+    <!-- Dev tool: npm run dev, then open /avatars.html to see every character as the viewer draws it.
+         ?hat=crown tries a hat on everyone; ?turn=0 stops the turntable. -->
+    <canvas id="c"></canvas>
+    <script type="module" src="/src/avatars/lineup.ts"></script>
+  </body>
+</html>
