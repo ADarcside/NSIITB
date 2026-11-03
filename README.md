@@ -51,6 +51,14 @@ The Round 1 link above stays as it was submitted.
 
 To see the tags locally, copy `sample/test-capture/pois.json` into `viewer/public/` as well (next to the scene, see [Try the viewer](#1-try-the-viewer-no-gpu)) and open `http://localhost:5173/?scene=scn_hostelroomac&pois=/pois.json`.
 
+**Save to live (owner only).** On the live `/round2/` site, tag mode has a **Save to live** button. It commits the places straight to the site repository (`pois.json` plus the manifest's checksum for it) and to `sample/test-capture/pois.json` on this branch, and GitHub Pages shows them about a minute later. It asks once per browser for a fine-grained GitHub token with *Contents: read and write* on those two repositories; the token stays in that browser's local storage and never ships with the site. A build gets the button only when the targets are set:
+
+```bash
+VITE_SAVE_LIVE='ADarcside/namma-space@main:round2/scn_hostelroomac' \
+VITE_SAVE_SOURCE='ADarcside/NSIITB@round-2:sample/test-capture/pois.json' \
+scripts/build_site.sh <scene_dir> site
+```
+
 The details are in [docs/round2-plan.md](docs/round2-plan.md). The data format is in [pipeline/schemas/pois.schema.json](pipeline/schemas/pois.schema.json), the pathfinder in [viewer/src/nav/astar.ts](viewer/src/nav/astar.ts), and search in [viewer/src/nav/search.ts](viewer/src/nav/search.ts).
 
 ## How a room becomes a link

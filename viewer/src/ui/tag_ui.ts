@@ -19,6 +19,7 @@ import {
   PoiDraftStore,
   downloadPoiSet,
 } from '../nav/pois.js';
+import { savePoisLive, tokenStore, SaveError, type SaveConfig } from '../nav/publish.js';
 import { ensureTokens, icon, trapTab } from './tokens.js';
 
 export interface TagUIOptions {
@@ -30,6 +31,8 @@ export interface TagUIOptions {
   manifestPois?: POI[];
   /** Called when the Adjust switch flips (main.ts stops pointer lock while it is on) */
   onAdjustChange?: (on: boolean) => void;
+  /** Where Save to live commits the places; no Save button when absent */
+  saveConfig?: SaveConfig | null;
 }
 
 interface ConfirmOptions {
@@ -86,6 +89,16 @@ export class TagUI {
 
   private readonly _phoneQuery: MediaQueryList | null;
 
+  // Save to live (owner only, GitHub key kept in this browser)
+  private readonly _saveConfig: SaveConfig | null;
+  private _saveLiveBtn: HTMLButtonElement | null = null;
+  private _forgetKeyBtn: HTMLButtonElement | null = null;
+  private _saving = false;
+  private readonly _keyOverlay: HTMLElement;
+  private readonly _keyInput: HTMLInputElement;
+  private _keyResolve: ((key: string | null) => void) | null = null;
+  private _keyReturnFocus: HTMLElement | null = null;
+
   constructor(options: TagUIOptions) {
     this._sceneId = options.sceneId;
     this._getPose = options.getPose;
@@ -95,6 +108,7 @@ export class TagUI {
     this._draftStore = new PoiDraftStore(this._sceneId);
     this._manifestPois = options.manifestPois ? [...options.manifestPois] : [];
     this._phoneQuery = window.matchMedia ? window.matchMedia(PHONE_QUERY) : null;
+    this._saveConfig = options.saveConfig ?? null;
 
     const parent = options.container ?? document.body;
 
@@ -216,6 +230,29 @@ export class TagUI {
     });
 
     footer.append(exportBtn, clearBtn);
+    if (this._saveConfig) {
+      const saveRow = document.createElement('div');
+      saveRow.className = 'tag-save-row';
+      this._saveLiveBtn = document.createElement('button');
+      this._saveLiveBtn.type = 'button';
+      this._saveLiveBtn.id = 'tag-save-live';
+      this._saveLiveBtn.className = 'ns-btn ns-btn-primary ns-press';
+      this._saveLiveBtn.textContent = 'Save to live';
+      this._saveLiveBtn.title = 'Publish these places to the live site (owner only)';
+      this._saveLiveBtn.addEventListener('click', () => void this.saveLive());
+      this._forgetKeyBtn = document.createElement('button');
+      this._forgetKeyBtn.type = 'button';
+      this._forgetKeyBtn.className = 'tag-forget-key';
+      this._forgetKeyBtn.textContent = 'Forget key';
+      this._forgetKeyBtn.title = 'Remove the saved GitHub key from this browser';
+      this._forgetKeyBtn.addEventListener('click', () => {
+        tokenStore.clear();
+        this._syncKeyUi();
+        this.showToast('Key removed from this browser');
+      });
+      saveRow.append(this._saveLiveBtn, this._forgetKeyBtn);
+      this._panelBody.appendChild(saveRow);
+    }
     this._panelBody.appendChild(footer);
     this._panel.appendChild(this._panelBody);
     this._root.appendChild(this._panel);
@@ -355,6 +392,67 @@ export class TagUI {
     this._confirmOverlay.appendChild(confirmCard);
     this._root.appendChild(this._confirmOverlay);
 
+    // 5. Owner key dialog (Save to live)
+    this._keyOverlay = document.createElement('div');
+    this._keyOverlay.id = 'tag-key-modal';
+    this._keyOverlay.className = 'ns-scrim tag-confirm-overlay hidden';
+    const keyCard = document.createElement('form');
+    keyCard.className = 'ns-dialog tag-confirm-card tag-key-card';
+    keyCard.setAttribute('role', 'dialog');
+    keyCard.setAttribute('aria-modal', 'true');
+    keyCard.setAttribute('aria-labelledby', 'tag-key-title');
+    const keyTitle = document.createElement('h2');
+    keyTitle.id = 'tag-key-title';
+    keyTitle.className = 'ns-dialog-title';
+    keyTitle.textContent = 'Owner key';
+    const keyNote = document.createElement('p');
+    keyNote.className = 'tag-key-note';
+    keyNote.textContent =
+      'Paste your GitHub key to save places to the live site. It stays in this browser only.';
+    this._keyInput = document.createElement('input');
+    this._keyInput.type = 'password';
+    this._keyInput.id = 'tag-key-input';
+    this._keyInput.className = 'ns-input';
+    this._keyInput.placeholder = 'github_pat_…';
+    this._keyInput.autocomplete = 'off';
+    this._keyInput.setAttribute('aria-label', 'GitHub key');
+    const keyActions = document.createElement('div');
+    keyActions.className = 'ns-dialog-actions';
+    const keyCancel = document.createElement('button');
+    keyCancel.type = 'button';
+    keyCancel.className = 'ns-btn ns-press';
+    keyCancel.textContent = 'Cancel';
+    keyCancel.addEventListener('click', () => this._closeKey(null));
+    const keyOk = document.createElement('button');
+    keyOk.type = 'submit';
+    keyOk.className = 'ns-btn ns-btn-primary ns-press';
+    keyOk.textContent = 'Use key';
+    keyActions.append(keyCancel, keyOk);
+    keyCard.append(keyTitle, keyNote, this._keyInput, keyActions);
+    keyCard.addEventListener('submit', e => {
+      e.preventDefault();
+      const key = this._keyInput.value.trim();
+      if (!key) {
+        this._keyInput.focus();
+        return;
+      }
+      this._closeKey(key);
+    });
+    this._keyOverlay.appendChild(keyCard);
+    this._keyOverlay.addEventListener('keydown', e => {
+      trapTab(keyCard, e);
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        this._closeKey(null);
+      }
+      e.stopPropagation();
+    });
+    this._keyOverlay.addEventListener('click', e => {
+      if (e.target === this._keyOverlay) this._closeKey(null);
+    });
+    this._root.appendChild(this._keyOverlay);
+    this._syncKeyUi();
+
     parent.appendChild(this._root);
 
     // Global keyboard listener for Esc on modal
@@ -465,6 +563,78 @@ export class TagUI {
     this._renderList();
     this.showToast(`Placed ${poi.name}${walkable ? '' : ' (off the floor map, routes end at the nearest floor spot)'}`);
     return poi;
+  }
+
+  /**
+   * Save to live: commits the current places to the live site (and the source repo) with the owner's
+   * GitHub key. Asks for the key the first time; a refused key is forgotten so the next press asks again.
+   */
+  async saveLive(): Promise<void> {
+    if (!this._saveConfig || this._saving) return;
+    let token = tokenStore.get();
+    if (!token) {
+      token = await this._askKey();
+      if (!token) return;
+      tokenStore.set(token);
+      this._syncKeyUi();
+    }
+    const n = this._pois.length;
+    const ok = await this._confirm({
+      title: `Save ${n} place${n === 1 ? '' : 's'} to the live site?`,
+      confirmLabel: 'Save to live',
+    });
+    if (!ok) return;
+    this._setSaving(true);
+    try {
+      await savePoisLive(this._saveConfig, token, this._sceneId, this._pois);
+      this.setManifestPois(this._pois);
+      this.showToast('Saved. The live site updates in about a minute.', 5000);
+    } catch (err) {
+      if (err instanceof SaveError && err.badToken) {
+        tokenStore.clear();
+        this._syncKeyUi();
+        this.showToast(`${err.message} Press Save to enter the key again.`, 6000);
+      } else {
+        this.showToast(`Not saved: ${err instanceof Error ? err.message : String(err)}`, 6000);
+      }
+    } finally {
+      this._setSaving(false);
+    }
+  }
+
+  private _setSaving(on: boolean): void {
+    this._saving = on;
+    if (this._saveLiveBtn) {
+      this._saveLiveBtn.disabled = on;
+      this._saveLiveBtn.textContent = on ? 'Saving…' : 'Save to live';
+    }
+  }
+
+  private _syncKeyUi(): void {
+    this._forgetKeyBtn?.classList.toggle('hidden', !tokenStore.get());
+  }
+
+  private _askKey(): Promise<string | null> {
+    if (this._keyResolve) this._closeKey(null);
+    document.exitPointerLock?.();
+    this._keyReturnFocus = document.activeElement as HTMLElement | null;
+    this._keyInput.value = '';
+    this._keyOverlay.classList.remove('hidden');
+    this._keyInput.focus();
+    return new Promise(resolve => {
+      this._keyResolve = resolve;
+    });
+  }
+
+  private _closeKey(key: string | null): void {
+    if (this._keyOverlay.classList.contains('hidden')) return;
+    this._keyOverlay.classList.add('hidden');
+    this._keyInput.value = '';
+    const resolve = this._keyResolve;
+    this._keyResolve = null;
+    this._restoreFocus(this._keyReturnFocus);
+    this._keyReturnFocus = null;
+    resolve?.(key);
   }
 
   setManifestPois(pois: POI[]): void {
@@ -1040,6 +1210,24 @@ export class TagUI {
         display: flex;
         gap: var(--ns-space-2);
       }
+      .tag-save-row {
+        padding: var(--ns-space-2) var(--ns-space-2) 0;
+        border-top: 1px solid var(--ns-border);
+        display: flex;
+        align-items: center;
+        gap: var(--ns-space-2);
+      }
+      .tag-save-row + .tag-panel-footer { border-top: 0; }
+      .tag-save-row .ns-btn { flex: 1; font-size: var(--ns-fs-xs); letter-spacing: 0.06em; }
+      .tag-save-row .ns-btn:disabled { opacity: 0.6; cursor: progress; }
+      .tag-forget-key {
+        background: none; border: 0; padding: 0 var(--ns-space-1);
+        color: var(--ns-text-muted); font: inherit; font-size: var(--ns-fs-xs);
+        text-decoration: underline; cursor: pointer; white-space: nowrap;
+      }
+      .tag-forget-key.hidden { display: none; }
+      .tag-key-note { margin: 0 0 var(--ns-space-2); color: var(--ns-text-muted); font-size: var(--ns-fs-sm); }
+      .tag-key-card .ns-input { width: 100%; box-sizing: border-box; }
       .tag-panel-footer .ns-btn { flex: 1; padding: 0 var(--ns-space-2); font-size: var(--ns-fs-xs); letter-spacing: 0.06em; white-space: nowrap; }
       @media (hover: hover) and (pointer: fine) {
         .tag-poi-row:hover { background: var(--ns-row-hover); }

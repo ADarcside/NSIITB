@@ -99,7 +99,8 @@ export async function fetchAndValidateManifest(
 
   let response: Response;
   try {
-    response = await fetch(url);
+    // Revalidate: tags saved from tag mode change the manifest without a rebuild
+    response = await fetch(url, { cache: 'no-cache' });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     throw new ViewerError(
@@ -196,7 +197,8 @@ export async function fetchAssetWithVerification(
 ): Promise<ArrayBuffer> {
   let response: Response;
   try {
-    response = await fetch(asset.uri);
+    // Small JSON assets (pois, grid) revalidate so saved tags show; big splats use the normal cache
+    response = await fetch(asset.uri, asset.format === 'json' ? { cache: 'no-cache' } : undefined);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     throw new ViewerError(

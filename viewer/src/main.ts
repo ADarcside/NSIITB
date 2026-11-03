@@ -24,6 +24,7 @@ import { MinimapUI } from './ui/minimap.js';
 import { TouchControls, isTouchDevice } from './controls/touch_controls.js';
 import { NavPlanner, type Point2 } from './nav/astar.js';
 import { validatePoiSet, PoiDraftStore } from './nav/pois.js';
+import { saveConfigFromEnv } from './nav/publish.js';
 import { TagUI } from './ui/tag_ui.js';
 import {
   parseSceneParam,
@@ -405,6 +406,7 @@ async function bootstrap() {
           minimap?.setPlaceMode(on);
           routeView.setDraggable(on);
         },
+        saveConfig: saveConfigFromEnv(import.meta.env),
       });
 
       if (initialDraft !== null) {
