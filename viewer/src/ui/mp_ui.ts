@@ -105,23 +105,47 @@ const CSS = `
     border: 1px solid var(--ns-border-strong); background: var(--ns-row); color: var(--ns-text); cursor: pointer; font: inherit; }
   .mp-expand svg { transition: transform var(--ns-dur-fast, .12s); }
   .mp-panel:not(.mp-collapsed) .mp-expand svg { transform: rotate(180deg); }
-  /* Phones: the room panel sits on the left under the top bar (the minimap is on the right) and starts
-     collapsed to the room code and Copy invite; the arrow opens the roster and the Mic / Point / Leave tools */
+  /* Phones: the room panel is one slim glass row under the top bar, lined up with the search bar:
+     ROOM code . Copy invite . arrow. The arrow opens players and the Mic / Point / Character / Leave tools */
   @media (max-width: 760px), (pointer: coarse) and (max-height: 520px) {
-    .mp-expand { display: grid; }
-    .mp-panel { z-index: 91; left: var(--ns-hud-left, 16px); right: auto; padding: var(--ns-space-2) var(--ns-space-3); overflow: auto; overscroll-behavior: contain; }
+    .mp-expand { display: grid; width: 36px; height: 36px; border-radius: var(--ns-radius-sm); }
+    .mp-panel { z-index: 91; left: var(--ns-hud-left, 16px); right: auto; width: auto;
+      max-width: calc(100% - var(--ns-hud-left, 16px) - var(--ns-hud-right, 16px));
+      padding: 3px 3px 3px var(--ns-space-3); gap: 0; overflow: auto; overscroll-behavior: contain;
+      border-radius: var(--ns-radius-lg); box-shadow: var(--ns-shadow); }
+    .mp-panel:not(.mp-collapsed) { width: 260px; padding: 3px var(--ns-space-3) var(--ns-space-3); gap: var(--ns-space-2); }
     .mp-panel.mp-collapsed .mp-roster, .mp-panel.mp-collapsed .mp-tools { display: none; }
-    .mp-code { flex-wrap: wrap; row-gap: 6px; }
-    .mp-code b { font-size: var(--ns-fs-md); }
-    .mp-btn.small { min-height: 32px; }
+    .mp-panel.mp-collapsed .mp-status:not(.offline) { display: none; }
+    .mp-panel:not(.mp-collapsed) .mp-code { margin-right: calc(-1 * var(--ns-space-3) + 3px); }
+    .mp-code { min-height: 38px; gap: var(--ns-space-3); }
+    .mp-code > div:first-child { display: flex; align-items: baseline; gap: 8px; white-space: nowrap; }
+    .mp-code .mp-label { font-size: 10px; }
+    .mp-code b { font-size: var(--ns-fs-md); letter-spacing: 0.1em; }
+    .mp-code-actions { gap: 4px; }
+    .mp-code-actions .mp-btn.small { min-height: 36px; padding: 0 12px; box-shadow: none; white-space: nowrap; }
+    .mp-tools { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .mp-tools .mp-btn.small { min-height: 36px; width: 100%; }
   }
+  /* Portrait: under the top bar row; an open minimap moves down below it (--ns-mp-h) */
   @media (max-width: 760px) {
-    /* Width leaves room for the phone minimap on the right (about 42% of the width, at most 180 px) */
-    .mp-panel { width: calc(100% - var(--ns-hud-left, 16px) - var(--ns-hud-right, 16px) - min(180px, 42vw) - 24px); top: calc(var(--ns-hud-top, 16px) + 2 * var(--ns-target, 44px) + 40px);
-      max-height: calc(100dvh - var(--ns-hud-top, 16px) - 2 * var(--ns-target, 44px) - 40px - 230px); }
+    .mp-panel { top: calc(var(--ns-hud-top, 16px) + 2 * var(--ns-target, 44px) + 32px);
+      max-height: calc(100dvh - var(--ns-hud-top, 16px) - 2 * var(--ns-target, 44px) - 32px - 230px); }
   }
+  /* Portrait: swipe the room bar left to tuck it into the screen edge (like a call pop-up);
+     a small tab stays at the edge and a tap or a swipe right brings it back */
+  .mp-tab { display: none; }
+  @media (max-width: 760px) {
+    .mp-panel { transition: translate var(--ns-dur, .2s) var(--ns-ease-out, ease-out); touch-action: pan-y; }
+    .mp-panel.mp-dragging { transition: none; }
+    .mp-panel.mp-tucked { translate: calc(-100% - var(--ns-hud-left, 16px) + 30px) 0; overflow: hidden; }
+    .mp-panel.mp-tucked .mp-tab { display: grid; }
+    .mp-tab { position: absolute; top: 0; right: 0; bottom: 0; width: 30px; place-items: center; padding: 0;
+      border: 0; border-left: 1px solid var(--ns-border); background: var(--ns-surface-strong); color: var(--ns-accent);
+      cursor: pointer; font: inherit; }
+  }
+  /* Landscape: under the search bar on the left (the minimap is on the right) */
   @media (pointer: coarse) and (max-height: 520px) {
-    .mp-panel { width: 230px; top: calc(var(--ns-hud-top, 16px) + var(--ns-target, 44px) + 14px);
+    .mp-panel { top: calc(var(--ns-hud-top, 16px) + var(--ns-target, 44px) + 14px);
       max-height: calc(100dvh - var(--ns-hud-top, 16px) - var(--ns-target, 44px) - 14px - var(--ns-hud-bottom, 16px)); }
     /* Short screens: while opened it may cover the joystick's top; the arrow folds it away again */
   }
@@ -372,6 +396,21 @@ export class MpUI {
     tools.append(this._micBtn, pointBtn, lookBtn, leaveBtn);
     this._panel.append(codeRow, this._status, this._roster, tools);
     document.body.append(this._panel);
+    // Phones: publish the panel's height so the portrait minimap can sit below it
+    if (typeof ResizeObserver !== 'undefined') {
+      const publish = () =>
+        document.documentElement.style.setProperty('--ns-mp-h', `${Math.round(this._panel.getBoundingClientRect().height)}px`);
+      new ResizeObserver(publish).observe(this._panel);
+    }
+
+    const tab = el('button', 'mp-tab');
+    tab.type = 'button';
+    tab.setAttribute('aria-label', 'Show the room bar');
+    tab.innerHTML =
+      '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>';
+    tab.addEventListener('click', () => this._setTucked(false));
+    this._panel.append(tab);
+    this._setupTuckSwipe();
 
     this._toast = el('div', 'mp-toast');
     this._toast.hidden = true;
@@ -455,7 +494,67 @@ export class MpUI {
     this._inRoom = true;
     this._codeLabel.textContent = formatRoomCode(code);
     this._setCollapsed(true); // only matters on phones; desktop always shows the full panel
+    this._panel.classList.remove('mp-tucked');
     this._panel.hidden = false;
+  }
+
+  private _setTucked(tucked: boolean): void {
+    if (tucked) this._setCollapsed(true);
+    this._panel.classList.toggle('mp-tucked', tucked);
+  }
+
+  /** Portrait phones: a left swipe on the room bar tucks it into the screen edge, a right swipe brings it back */
+  private _setupTuckSwipe(): void {
+    const panel = this._panel;
+    const portrait = () => window.matchMedia?.('(max-width: 760px)').matches ?? false;
+    let start: { x: number; y: number; id: number } | null = null;
+    let dx = 0;
+    let dragging = false;
+    panel.addEventListener('pointerdown', e => {
+      if (e.pointerType !== 'touch' || !portrait()) return;
+      start = { x: e.clientX, y: e.clientY, id: e.pointerId };
+      dx = 0;
+      dragging = false;
+    });
+    panel.addEventListener('pointermove', e => {
+      if (!start || e.pointerId !== start.id) return;
+      const mx = e.clientX - start.x;
+      if (!dragging && Math.abs(mx) > 10 && Math.abs(mx) > Math.abs(e.clientY - start.y)) {
+        dragging = true;
+        panel.setPointerCapture?.(e.pointerId);
+        panel.classList.add('mp-dragging');
+      }
+      if (!dragging) return;
+      const tucked = panel.classList.contains('mp-tucked');
+      dx = tucked ? Math.max(0, mx) : Math.min(0, mx);
+      if (!tucked) panel.style.translate = `${dx}px 0`;
+    });
+    const end = (e: PointerEvent) => {
+      if (!start || e.pointerId !== start.id) return;
+      start = null;
+      panel.classList.remove('mp-dragging');
+      panel.style.translate = '';
+      if (!dragging) return;
+      dragging = false;
+      const tucked = panel.classList.contains('mp-tucked');
+      if (!tucked && dx < -50) this._setTucked(true);
+      else if (tucked && dx > 30) this._setTucked(false);
+      swipedAt = performance.now();
+    };
+    // A swipe must not also press a button under the finger
+    let swipedAt = -1e9;
+    panel.addEventListener(
+      'click',
+      ev => {
+        if (performance.now() - swipedAt < 350) {
+          ev.stopPropagation();
+          ev.preventDefault();
+        }
+      },
+      { capture: true }
+    );
+    panel.addEventListener('pointerup', end);
+    panel.addEventListener('pointercancel', end);
   }
 
   private _setCollapsed(collapsed: boolean): void {

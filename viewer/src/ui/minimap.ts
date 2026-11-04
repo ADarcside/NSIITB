@@ -553,7 +553,8 @@ export class MinimapUI {
       }
       @media (max-width: 760px) {
         .namma-minimap-container {
-          top: calc(var(--ns-hud-top) + 2 * var(--ns-target) + 40px);
+          /* --ns-mp-h: height of the multiplayer room bar above it (0 when there is none) */
+          top: calc(var(--ns-hud-top) + 2 * var(--ns-target) + 40px + var(--ns-mp-h, 0px));
           padding: 3px;
         }
       }
