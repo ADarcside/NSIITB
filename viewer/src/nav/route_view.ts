@@ -115,6 +115,7 @@ export class RouteView {
   private readonly _labelContainer: HTMLElement;
   private _labelsHidden = false;
   private readonly _labelElements = new Map<string, HTMLElement>();
+  private readonly _labelSizes = new Map<HTMLElement, { w: number; h: number }>();
   private readonly _pickCallbacks: ((poi: POI) => void)[] = [];
   private readonly _pillDownCallbacks: ((poi: POI, e: PointerEvent) => boolean)[] = [];
   private _suppressClick = false;
@@ -151,10 +152,14 @@ export class RouteView {
     this._labelContainer.id = 'namma-poi-labels';
     this._labelContainer.className = 'namma-poi-labels-container ns-ui';
     parent.appendChild(this._labelContainer);
+    window.addEventListener('resize', this._onResize);
 
     ensureTokens();
     this._injectStyles();
   }
+
+  /** Pill sizes depend on the screen (phone styles), so they are measured again after a resize */
+  private readonly _onResize = (): void => this._labelSizes.clear();
 
   onPick(cb: (poi: POI) => void): void {
     this._pickCallbacks.push(cb);
@@ -223,6 +228,7 @@ export class RouteView {
     this._pois = pois;
     this._labelElements.forEach(el => el.remove());
     this._labelElements.clear();
+    this._labelSizes.clear();
 
     for (const poi of pois) {
       const pill = document.createElement('button');
@@ -258,6 +264,7 @@ export class RouteView {
 
   setHighlight(poiId: string | null): void {
     this._highlightId = poiId;
+    this._labelSizes.clear(); // the highlighted pill is a different size
     for (const [id, el] of this._labelElements) {
       if (id === poiId) {
         el.classList.add('highlight');
@@ -428,6 +435,9 @@ export class RouteView {
     const w = window.innerWidth;
     const h = window.innerHeight;
 
+    // Labels that would overlap a nearer one are hidden, so a cluster of places reads as one tidy label
+    // instead of a pile (the destination always wins). Sizes are measured once per label.
+    const shown: { el: HTMLElement; x: number; y: number; distance: number; highlight: boolean }[] = [];
     for (const poi of this._pois) {
       const el = this._labelElements.get(poi.poi_id);
       if (!el) continue;
@@ -438,25 +448,43 @@ export class RouteView {
         continue;
       }
       const proj = projectLabel(poi.position, camera, w, h, 12, isHighlight);
-
-      if (proj.visible) {
-        el.style.display = 'block';
-        el.style.transform = `translate(-50%, -50%) translate3d(${Math.round(proj.x)}px, ${Math.round(proj.y)}px, 0)`;
-        if (isHighlight) {
-          el.classList.add('highlight');
-          el.style.opacity = '1';
-        } else {
-          el.classList.remove('highlight');
-          const fade = proj.distance <= 6 ? 1 : Math.max(0, 1 - (proj.distance - 6) / 6);
-          el.style.opacity = fade.toFixed(2);
-        }
-      } else {
+      if (!proj.visible) {
         el.style.display = 'none';
+        continue;
+      }
+      shown.push({ el, x: proj.x, y: proj.y, distance: proj.distance, highlight: isHighlight });
+    }
+    shown.sort((a, b) => Number(b.highlight) - Number(a.highlight) || a.distance - b.distance);
+
+    const placed: { l: number; t: number; r: number; b: number }[] = [];
+    for (const s of shown) {
+      const { el } = s;
+      if (el.style.display === 'none') el.style.display = 'block';
+      let size = this._labelSizes.get(el);
+      if (!size || size.w === 0) {
+        size = { w: el.offsetWidth, h: el.offsetHeight };
+        this._labelSizes.set(el, size);
+      }
+      const box = { l: s.x - size.w / 2 - 4, t: s.y - size.h / 2 - 3, r: s.x + size.w / 2 + 4, b: s.y + size.h / 2 + 3 };
+      if (!s.highlight && placed.some(p => box.l < p.r && box.r > p.l && box.t < p.b && box.b > p.t)) {
+        el.style.display = 'none';
+        continue;
+      }
+      placed.push(box);
+      el.style.transform = `translate(-50%, -50%) translate3d(${Math.round(s.x)}px, ${Math.round(s.y)}px, 0)`;
+      if (s.highlight) {
+        el.classList.add('highlight');
+        el.style.opacity = '1';
+      } else {
+        el.classList.remove('highlight');
+        const fade = s.distance <= 6 ? 1 : Math.max(0, 1 - (s.distance - 6) / 6);
+        el.style.opacity = fade.toFixed(2);
       }
     }
   }
 
   dispose(): void {
+    window.removeEventListener('resize', this._onResize);
     this.setPath(null);
     this._clearArrival();
     this._ribbonMat.dispose();

@@ -492,6 +492,7 @@ export class NavUI {
     this._poiCardCloseBtn.addEventListener('click', () => {
       this.hidePoiCard();
     });
+    this._setupCardSwipe();
 
     this._poiCardNavBtn.addEventListener('click', () => {
       if (this._currentPoiCardItem) {
@@ -520,6 +521,37 @@ export class NavUI {
         this.hidePoiCard();
       }
     });
+  }
+
+  /** Touch: drag the place card down to close it (the same as its close button). Buttons keep their taps. */
+  private _setupCardSwipe(): void {
+    const card = this._poiCard;
+    let startY = 0;
+    let dy = 0;
+    let pointerId: number | null = null;
+    const end = (e: PointerEvent) => {
+      if (pointerId !== e.pointerId) return;
+      pointerId = null;
+      card.style.transition = '';
+      card.style.translate = '';
+      if (dy > 56) this.hidePoiCard();
+      dy = 0;
+    };
+    card.addEventListener('pointerdown', e => {
+      if (e.pointerType !== 'touch' || (e.target instanceof Element && e.target.closest('button'))) return;
+      pointerId = e.pointerId;
+      startY = e.clientY;
+      dy = 0;
+      card.setPointerCapture?.(e.pointerId);
+    });
+    card.addEventListener('pointermove', e => {
+      if (pointerId !== e.pointerId) return;
+      dy = Math.max(0, e.clientY - startY);
+      card.style.transition = 'none';
+      card.style.translate = `0 ${dy}px`;
+    });
+    card.addEventListener('pointerup', end);
+    card.addEventListener('pointercancel', end);
   }
 
   private _showResults(): void {
@@ -931,7 +963,8 @@ export class NavUI {
           pointer-events: none;
         }
         .nav-route-card, .nav-poi-card {
-          position: static;
+          position: relative; /* relative (not static) so the place card's grab handle can sit on it */
+          inset: auto;
           transform: none;
           width: auto;
           max-width: none;
@@ -975,6 +1008,19 @@ export class NavUI {
           padding: 6px 6px 8px 12px;
         }
         .nav-poi-card.hidden { display: none; }
+        /* Grab handle: the card can be dragged down to close */
+        .nav-poi-card { padding-top: 14px; touch-action: none; }
+        .nav-poi-card::before {
+          content: '';
+          position: absolute;
+          top: 5px;
+          left: 50%;
+          width: 36px;
+          height: 4px;
+          margin-left: -18px;
+          border-radius: 2px;
+          background: var(--ns-border-strong);
+        }
         .nav-poi-card-header, .nav-poi-card-meta { display: contents; }
         .nav-poi-card-title {
           grid-column: 1; grid-row: 1;
@@ -1008,7 +1054,8 @@ export class NavUI {
           pointer-events: none;
         }
         .nav-route-card, .nav-poi-card {
-          position: static;
+          position: relative; /* relative (not static) so the place card's grab handle can sit on it */
+          inset: auto;
           transform: none;
           width: auto;
           max-width: none;

@@ -8,9 +8,9 @@ import { ensureTokens } from './tokens.js';
 
 const STYLE_ID = 'namma-mp-switch';
 const CSS = `
-  .mps-scrim { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 16px;
+  .mps-scrim { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; padding: 16px;
     background: var(--ns-scrim); font-family: var(--ns-font); color: var(--ns-text); }
-  .mps-card { width: min(460px, 100%); background: var(--ns-surface-strong); border: 1px solid var(--ns-border-strong);
+  .mps-card { width: min(460px, 100%); max-height: calc(100dvh - 32px); overflow: auto; overscroll-behavior: contain; background: var(--ns-surface-strong); border: 1px solid var(--ns-border-strong);
     border-radius: var(--ns-radius-lg); box-shadow: var(--ns-shadow); padding: var(--ns-space-5); display: grid; gap: var(--ns-space-3); }
   .mps-card h2 { font-size: var(--ns-fs-xl); color: var(--ns-accent); letter-spacing: var(--ns-heading-ls); text-transform: uppercase; }
   .mps-card p { font-size: var(--ns-fs-md); color: var(--ns-text-muted); line-height: 1.5; }

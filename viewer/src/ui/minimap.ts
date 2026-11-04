@@ -147,6 +147,8 @@ export class MinimapUI {
 
     this._updateSize();
     this._setupEvents();
+    // Phones: start with the map closed so the room isn't crowded; the Map button (N) opens it
+    if (isPhone() && !this._isTagMode) this.hide();
   }
 
   get isVisible(): boolean {

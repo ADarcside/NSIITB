@@ -45,10 +45,11 @@ export interface MpUIOptions {
 
 const STYLE_ID = 'namma-mp-ui';
 const CSS = `
-  .mp-scrim { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: var(--ns-scrim);
+  /* Above the HUD, search, minimap and touch controls (z 85-95), so nothing shows through on phones */
+  .mp-scrim { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; background: var(--ns-scrim);
     font-family: var(--ns-font); color: var(--ns-text); padding: 16px; }
   .mp-scrim[hidden] { display: none; }
-  .mp-card { width: min(560px, 100%); max-height: calc(100vh - 32px); overflow: auto; background: var(--ns-surface-strong);
+  .mp-card { width: min(560px, 100%); max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px); overflow: auto; overscroll-behavior: contain; background: var(--ns-surface-strong);
     border: 1px solid var(--ns-border-strong); border-radius: var(--ns-radius-lg); box-shadow: var(--ns-shadow);
     padding: var(--ns-space-5); display: grid; gap: var(--ns-space-4); }
   .mp-card h2 { font-size: var(--ns-fs-xl); color: var(--ns-accent); letter-spacing: var(--ns-heading-ls); text-transform: uppercase; }
@@ -93,12 +94,37 @@ const CSS = `
   .mp-dot.speaking { box-shadow: 0 0 0 4px rgba(128, 237, 153, 0.55); }
   .mp-roster .mp-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .mp-tools { display: flex; flex-wrap: wrap; gap: 6px; }
-  .mp-toast { position: fixed; z-index: 70; left: 50%; top: calc(var(--ns-hud-top, 16px) + 64px); transform: translateX(-50%);
+  .mp-toast { position: fixed; z-index: 210; left: 50%; top: calc(var(--ns-hud-top, 16px) + 64px); transform: translateX(-50%);
     font-family: var(--ns-font); font-size: var(--ns-fs-md); color: var(--ns-text); background: var(--ns-surface-strong);
     border: 1px solid var(--ns-border-strong); border-radius: var(--ns-radius-pill); padding: 8px 16px; pointer-events: none; }
   .mp-toast.warn { border-color: var(--ns-warn-border); color: var(--ns-warn-text); }
   .mp-toast[hidden] { display: none; }
   .ns-kbd-mp { font-size: 10px; opacity: .7; margin-left: 4px; }
+  .mp-code-actions { display: flex; align-items: center; gap: 6px; }
+  .mp-expand { display: none; width: 32px; height: 32px; padding: 0; place-items: center; border-radius: var(--ns-radius-sm);
+    border: 1px solid var(--ns-border-strong); background: var(--ns-row); color: var(--ns-text); cursor: pointer; font: inherit; }
+  .mp-expand svg { transition: transform var(--ns-dur-fast, .12s); }
+  .mp-panel:not(.mp-collapsed) .mp-expand svg { transform: rotate(180deg); }
+  /* Phones: the room panel sits on the left under the top bar (the minimap is on the right) and starts
+     collapsed to the room code and Copy invite; the arrow opens the roster and the Mic / Point / Leave tools */
+  @media (max-width: 760px), (pointer: coarse) and (max-height: 520px) {
+    .mp-expand { display: grid; }
+    .mp-panel { z-index: 91; left: var(--ns-hud-left, 16px); right: auto; padding: var(--ns-space-2) var(--ns-space-3); overflow: auto; overscroll-behavior: contain; }
+    .mp-panel.mp-collapsed .mp-roster, .mp-panel.mp-collapsed .mp-tools { display: none; }
+    .mp-code { flex-wrap: wrap; row-gap: 6px; }
+    .mp-code b { font-size: var(--ns-fs-md); }
+    .mp-btn.small { min-height: 32px; }
+  }
+  @media (max-width: 760px) {
+    /* Width leaves room for the phone minimap on the right (about 42% of the width, at most 180 px) */
+    .mp-panel { width: calc(100% - var(--ns-hud-left, 16px) - var(--ns-hud-right, 16px) - min(180px, 42vw) - 24px); top: calc(var(--ns-hud-top, 16px) + 2 * var(--ns-target, 44px) + 40px);
+      max-height: calc(100dvh - var(--ns-hud-top, 16px) - 2 * var(--ns-target, 44px) - 40px - 230px); }
+  }
+  @media (pointer: coarse) and (max-height: 520px) {
+    .mp-panel { width: 230px; top: calc(var(--ns-hud-top, 16px) + var(--ns-target, 44px) + 14px);
+      max-height: calc(100dvh - var(--ns-hud-top, 16px) - var(--ns-target, 44px) - 14px - var(--ns-hud-bottom, 16px)); }
+    /* Short screens: while opened it may cover the joystick's top; the arrow folds it away again */
+  }
   @media (max-width: 560px) { .mp-row { grid-template-columns: 1fr; } .mp-preview { width: 100%; height: 180px; } }
 `;
 
@@ -183,6 +209,7 @@ export class MpUI {
   private readonly _preview: AvatarPreview;
   private readonly _panel: HTMLElement;
   private readonly _codeLabel: HTMLElement;
+  private _expandBtn!: HTMLButtonElement;
   private readonly _status: HTMLElement;
   private readonly _roster: HTMLElement;
   private readonly _micBtn: HTMLButtonElement;
@@ -314,7 +341,16 @@ export class MpUI {
     const copyBtn = el('button', 'mp-btn small primary', 'Copy invite');
     copyBtn.type = 'button';
     copyBtn.addEventListener('click', () => o.onCopyInvite());
-    codeRow.append(codeWrap, copyBtn);
+    const expandBtn = el('button', 'mp-expand');
+    expandBtn.type = 'button';
+    expandBtn.setAttribute('aria-label', 'Show players and room tools');
+    expandBtn.innerHTML =
+      '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
+    expandBtn.addEventListener('click', () => this._setCollapsed(!this._panel.classList.contains('mp-collapsed')));
+    this._expandBtn = expandBtn;
+    const codeActions = el('div', 'mp-code-actions');
+    codeActions.append(copyBtn, expandBtn);
+    codeRow.append(codeWrap, codeActions);
     this._status = el('div', 'mp-status', 'Connecting');
     this._roster = el('ul', 'mp-roster');
     const tools = el('div', 'mp-tools');
@@ -418,7 +454,13 @@ export class MpUI {
   enterRoom(code: string): void {
     this._inRoom = true;
     this._codeLabel.textContent = formatRoomCode(code);
+    this._setCollapsed(true); // only matters on phones; desktop always shows the full panel
     this._panel.hidden = false;
+  }
+
+  private _setCollapsed(collapsed: boolean): void {
+    this._panel.classList.toggle('mp-collapsed', collapsed);
+    this._expandBtn.setAttribute('aria-expanded', String(!collapsed));
   }
 
   leaveRoom(): void {

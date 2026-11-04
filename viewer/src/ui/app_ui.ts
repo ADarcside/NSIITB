@@ -97,6 +97,12 @@ export interface AppUIOptions {
   onFriendsClick?: () => void;
 }
 
+/** Phone-sized touch screen: narrow portrait, or a short touch screen in landscape */
+function isPhoneHud(): boolean {
+  if (typeof window === 'undefined' || !window.matchMedia) return false;
+  return window.matchMedia('(pointer: coarse) and (max-width: 760px), (pointer: coarse) and (max-height: 520px)').matches;
+}
+
 export class VanillaAppUI implements AppUI {
   private readonly _root: HTMLElement;
   private readonly _progressContainer: HTMLElement;
@@ -306,6 +312,13 @@ export class VanillaAppUI implements AppUI {
       menuList.setAttribute('role', 'menu');
       modeBadge.title = 'Collision mode: Ghost walks through everything, Grid stops at walls';
       menuList.appendChild(modeBadge);
+      // Phones: fps, scene quality and footstep volume move into this menu too, so the HUD row
+      // fits the screen without scrolling (search, Move, Play with friends, Map, Tags, Help, More)
+      if (isPhoneHud()) {
+        topHud.classList.add('hud-compact');
+        menuList.append(this._qualityBtn, this._volumeBox, fpsBadge);
+        this._qualityBtn.setAttribute('role', 'menuitem');
+      }
       for (const item of [this._resetButton, modeBadge]) item.setAttribute('role', 'menuitem');
       const setOpen = (open: boolean) => {
         menuList.classList.toggle('hidden', !open);
@@ -770,6 +783,15 @@ export class VanillaAppUI implements AppUI {
       .hud-menu .hud-chip, .hud-menu .hud-button { justify-content: flex-start; width: 100%; }
       .hud-menu .hud-button .ns-kbd { margin-left: auto; }
       .hud-menu .hud-label { display: inline !important; }
+      .hud-menu .hud-chip-k { display: inline !important; }
+      .hud-menu .fps-badge .hud-chip-v::after { content: none !important; }
+      .hud-menu .fps-badge { cursor: default; }
+      .hud-menu .volume-box input[type='range'] { flex: 1; width: auto; }
+      /* Compact phone HUD: everything fits one row, so no scrolling (which also clipped the
+         rounded glass and the More menu into a visible rectangle) */
+      .hud-top-right.hud-compact { overflow: visible !important; }
+      /* An open More menu sits above the minimap and the bottom cards */
+      .hud-top-right:has(.hud-menu:not(.hidden)) { z-index: 97; }
       .hud-friends { padding: 3px; border-color: var(--ns-accent); }
       .hud-friends-btn { color: var(--ns-accent); padding: 0 12px; }
       .hud-friends-btn .ns-icon { flex: none; }
@@ -795,6 +817,8 @@ export class VanillaAppUI implements AppUI {
           gap: 6px;
         }
         .hud-top-right::-webkit-scrollbar { display: none; }
+        /* Compact phone row sits on the right, so the More menu opens at the right edge */
+        .hud-top-right.hud-compact { justify-content: flex-end; }
         .hud-group { flex: none; }
         /* Tag mode is shown in the Places sheet header on phones, so the HUD row keeps Map and Help */
         .hud-tag-badge { display: none; }
