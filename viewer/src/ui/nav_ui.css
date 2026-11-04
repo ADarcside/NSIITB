@@ -1,0 +1,420 @@
+.namma-nav-ui-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  font-family: var(--ns-font);
+  color: var(--ns-text);
+  overflow: hidden;
+}
+
+/* ---------- Search ---------- */
+.nav-search-container {
+  position: absolute;
+  top: var(--ns-hud-top);
+  left: var(--ns-hud-left);
+  z-index: 95;
+  width: 300px;
+  pointer-events: auto;
+}
+.nav-search-bar {
+  display: flex;
+  align-items: center;
+  min-height: calc(var(--ns-target) + 8px);
+  background: var(--ns-surface);
+  backdrop-filter: var(--ns-blur);
+  -webkit-backdrop-filter: var(--ns-blur);
+  border: 1px solid var(--ns-border);
+  border-radius: var(--ns-radius-lg);
+  padding: 0 var(--ns-space-2) 0 var(--ns-space-1);
+  gap: var(--ns-space-1);
+  box-shadow: var(--ns-shadow);
+  transition: border-color var(--ns-dur-fast) ease, box-shadow var(--ns-dur-fast) ease;
+}
+.nav-search-bar:focus-within {
+  border-color: var(--ns-accent);
+  box-shadow: var(--ns-shadow), 0 0 0 3px var(--ns-accent-ring);
+}
+.nav-search-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ns-target);
+  height: var(--ns-target);
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: var(--ns-accent);
+  cursor: pointer;
+}
+.nav-search-input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--ns-text);
+  font-size: var(--ns-fs-md);
+  font-weight: 500;
+  caret-color: var(--ns-accent);
+  -webkit-appearance: none;
+  appearance: none;
+}
+/* The bar's :focus-within ring is the focus indicator; no second ring on the input */
+.nav-search-input:focus-visible { outline: none; }
+.nav-search-input::-webkit-search-cancel-button { -webkit-appearance: none; }
+.nav-search-input::placeholder { color: var(--ns-text-subtle); }
+.nav-search-bar:focus-within .nav-search-kbd { opacity: 0; }
+.nav-search-kbd { transition: opacity var(--ns-dur-fast) ease; }
+.nav-results-list {
+  margin-top: 6px;
+  padding: var(--ns-space-1);
+  background: var(--ns-surface-strong);
+  border: 1px solid var(--ns-border);
+  border-radius: var(--ns-radius-lg);
+  box-shadow: var(--ns-shadow);
+  max-height: min(380px, 50vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  transform-origin: top left;
+  transition: opacity var(--ns-dur-fast) var(--ns-ease-out), transform var(--ns-dur-fast) var(--ns-ease-out),
+    display var(--ns-dur-fast) allow-discrete;
+  @starting-style { opacity: 0; transform: translateY(-4px) scale(0.98); }
+}
+.nav-results-list.hidden { opacity: 0; transform: translateY(-4px) scale(0.98); }
+.nav-result-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--ns-space-3);
+  min-height: var(--ns-target);
+  padding: 6px 10px;
+  border-radius: var(--ns-radius-sm);
+  cursor: pointer;
+}
+.nav-result-row.selected { background: var(--ns-accent-soft); box-shadow: inset 2px 0 0 var(--ns-accent); }
+.nav-result-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--ns-fs-md);
+  font-weight: 600;
+  color: var(--ns-text);
+}
+.nav-result-row.selected .nav-result-name { color: var(--ns-accent); }
+.nav-result-cat {
+  flex: none;
+  font-size: var(--ns-fs-xs);
+  font-weight: 500;
+  color: var(--ns-text-muted);
+  text-transform: lowercase;
+}
+.nav-result-empty {
+  padding: var(--ns-space-3) 14px;
+  font-size: var(--ns-fs-sm);
+  color: var(--ns-text-muted);
+  text-align: center;
+}
+
+/* ---------- Bottom cards ---------- */
+.nav-bottom-stack { display: contents; }
+.nav-route-card, .nav-poi-card {
+  background: var(--ns-surface-strong);
+  box-shadow: var(--ns-shadow);
+  pointer-events: auto;
+  transition: opacity var(--ns-dur) var(--ns-ease-out), translate var(--ns-dur) var(--ns-ease-out),
+    display var(--ns-dur) allow-discrete;
+  @starting-style { opacity: 0; translate: 0 8px; }
+}
+.nav-route-card.hidden, .nav-poi-card.hidden {
+  opacity: 0;
+  translate: 0 6px;
+  transition-duration: var(--ns-dur-fast);
+}
+
+.nav-route-card {
+  position: absolute;
+  bottom: var(--ns-hud-bottom);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  gap: var(--ns-space-2);
+  max-width: min(560px, calc(100% - 2 * var(--ns-edge)));
+  border: 1px solid var(--ns-route-soft);
+  border-radius: var(--ns-radius-lg);
+  padding: 5px 5px 5px 16px;
+  color: var(--ns-text);
+  font-size: var(--ns-fs-md);
+}
+.nav-route-card.arrived { border-color: var(--ns-success-border); }
+.nav-route-card.no-path { border-color: var(--ns-nopath-border); }
+.nav-route-content {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.nav-route-content strong { color: var(--ns-route); font-weight: 700; }
+.nav-route-dist {
+  margin-left: 6px;
+  font-weight: 700;
+  color: var(--ns-text-strong);
+}
+.nav-icon-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ns-target);
+  height: var(--ns-target);
+  padding: 0;
+  border: none;
+  border-radius: var(--ns-radius-sm);
+  background: transparent;
+  color: var(--ns-text-muted);
+  cursor: pointer;
+}
+.nav-route-walk-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--ns-target);
+  padding: 0 14px;
+  border: none;
+  border-radius: var(--ns-radius-sm);
+  background: var(--ns-primary);
+  color: var(--ns-on-accent);
+  box-shadow: var(--ns-glow);
+  font-size: var(--ns-fs-sm);
+  font-weight: 700;
+  letter-spacing: var(--ns-label-ls);
+  text-transform: uppercase;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.nav-route-walk-btn.walking { background: var(--ns-danger); color: var(--ns-on-fill); box-shadow: none; }
+@media (hover: hover) and (pointer: fine) {
+  .nav-icon-btn:hover { color: var(--ns-sky); background: var(--ns-surface-hover); }
+  .nav-route-walk-btn:hover { background: var(--ns-primary-hover); box-shadow: var(--ns-glow-strong); }
+  .nav-route-walk-btn.walking:hover { background: var(--ns-danger-hover); }
+  .nav-result-row:hover { background: var(--ns-accent-soft); }
+}
+
+.nav-poi-card {
+  position: absolute;
+  bottom: var(--ns-hud-bottom);
+  left: var(--ns-hud-left);
+  z-index: 90;
+  width: 300px;
+  max-width: calc(100vw - 2 * var(--ns-edge));
+  border: 1px solid var(--ns-border);
+  border-radius: var(--ns-radius-lg);
+  padding: var(--ns-space-3) var(--ns-space-3) var(--ns-space-3) var(--ns-space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--ns-space-2);
+}
+.nav-poi-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--ns-space-2);
+  margin: -4px -4px 0 0;
+}
+.nav-poi-card-title {
+  margin: 0;
+  min-width: 0;
+  font-size: var(--ns-fs-lg);
+  font-weight: 700;
+  letter-spacing: var(--ns-heading-ls);
+  color: var(--ns-accent);
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+.nav-poi-card-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--ns-space-2);
+  padding-right: var(--ns-space-1);
+}
+.nav-poi-card-cat {
+  font-size: var(--ns-fs-xs);
+  font-weight: 700;
+  letter-spacing: var(--ns-label-ls);
+  text-transform: uppercase;
+  background: transparent;
+  color: var(--ns-copper);
+  padding: 1px 8px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+}
+.nav-poi-card-dist {
+  font-size: var(--ns-fs-sm);
+  font-weight: 600;
+  color: var(--ns-text);
+}
+.nav-poi-card-desc {
+  font-size: var(--ns-fs-sm);
+  color: var(--ns-text-muted);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.nav-poi-card-aliases {
+  font-size: var(--ns-fs-xs);
+  color: var(--ns-text-muted);
+  overflow-wrap: anywhere;
+}
+.nav-poi-card-actions {
+  display: flex;
+  gap: var(--ns-space-2);
+  margin-top: var(--ns-space-1);
+  padding-right: var(--ns-space-1);
+}
+.nav-poi-btn {
+  flex: 1;
+  min-height: var(--ns-target);
+  padding: 0 var(--ns-space-3);
+  border: none;
+  border-radius: 2px;
+  font-size: var(--ns-fs-sm);
+  font-weight: 700;
+  letter-spacing: var(--ns-label-ls);
+  text-transform: uppercase;
+  cursor: pointer;
+}
+/* Navigate / Look are a slanted pair, like the site's EXPLORE / REGISTER */
+.nav-poi-btn.primary {
+  background: var(--ns-primary);
+  color: var(--ns-on-accent);
+}
+.nav-poi-btn.secondary {
+  background: var(--ns-surface-hover-strong);
+  color: var(--ns-text);
+}
+.nav-poi-card-actions { gap: 4px; }
+@media (hover: hover) and (pointer: fine) {
+  .nav-poi-btn.primary:hover { background: var(--ns-primary-hover); }
+  .nav-poi-btn.secondary:hover { background: var(--ns-surface-hover-strong); color: var(--ns-sky); }
+}
+
+/* Below 900 px: POI card and route card share one bottom-left column */
+@media (max-width: 900px) {
+  .nav-bottom-stack {
+    position: absolute;
+    left: var(--ns-hud-left);
+    bottom: var(--ns-hud-bottom);
+    z-index: 90;
+    display: flex;
+    flex-direction: column;
+    gap: var(--ns-space-2);
+    width: min(380px, calc(100% - 2 * var(--ns-edge)));
+    pointer-events: none;
+  }
+  .nav-route-card, .nav-poi-card {
+    position: relative; /* relative (not static) so the place card's grab handle can sit on it */
+    inset: auto;
+    transform: none;
+    width: auto;
+    max-width: none;
+  }
+}
+
+/* Phone: search spans the top row */
+@media (max-width: 760px) {
+  .nav-search-container {
+    left: var(--ns-hud-left);
+    right: var(--ns-hud-right);
+    width: auto;
+  }
+  .nav-search-input { font-size: 16px; } /* 16 px stops iOS zooming into the field */
+  /* The open results list covers the HUD row; hide the row so its blurred glass can't show through */
+  html.ns-search-open .hud-top-right { visibility: hidden; }
+  /* In tag mode the Places sheet publishes its height; the cards sit on top of it, never under */
+  .nav-bottom-stack {
+    right: var(--ns-hud-right);
+    width: auto;
+    bottom: calc(var(--ns-hud-bottom) + var(--ns-sheet-h, 0px));
+  }
+  .nav-poi-card { padding: var(--ns-space-2) var(--ns-space-2) var(--ns-space-2) var(--ns-space-3); gap: 6px; }
+}
+
+/* Phones: one bottom panel at a time. While a place card is open it already has Navigate,
+   so the route bar steps aside instead of stacking under it (it comes back when the card closes) */
+@media (max-width: 900px), (pointer: coarse) and (max-height: 520px) {
+  .nav-bottom-stack:has(> .nav-poi-card:not(.hidden)) > .nav-route-card { display: none; }
+}
+
+/* Phones: a slim place card, two rows: name, distance, close / Navigate, Look.
+   Category, description and aliases are left out so the card covers as little of the room as possible */
+@media (max-width: 760px), (pointer: coarse) and (max-width: 900px), (pointer: coarse) and (max-height: 520px) {
+  .nav-poi-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    column-gap: var(--ns-space-2);
+    row-gap: 6px;
+    padding: 6px 6px 8px 12px;
+  }
+  .nav-poi-card.hidden { display: none; }
+  /* Grab handle: the card can be dragged down to close */
+  .nav-poi-card { padding-top: 14px; touch-action: none; }
+  .nav-poi-card::before {
+    content: '';
+    position: absolute;
+    top: 5px;
+    left: 50%;
+    width: 36px;
+    height: 4px;
+    margin-left: -18px;
+    border-radius: 2px;
+    background: var(--ns-border-strong);
+  }
+  .nav-poi-card-header, .nav-poi-card-meta { display: contents; }
+  .nav-poi-card-title {
+    grid-column: 1; grid-row: 1;
+    font-size: var(--ns-fs-md);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .nav-poi-card-cat { display: none; }
+  .nav-poi-card-dist { grid-column: 2; grid-row: 1; white-space: nowrap; }
+  .nav-poi-card-close { grid-column: 3; grid-row: 1; width: 32px; height: 32px; }
+  .nav-poi-card-desc, .nav-poi-card-aliases { display: none !important; }
+  .nav-poi-card-actions { grid-column: 1 / -1; grid-row: 2; margin-top: 0; padding-right: 0; }
+  .nav-poi-btn { min-height: 38px; font-size: var(--ns-fs-xs); }
+}
+
+/* Landscape phones: search shares the top row with the HUD; the bottom panel is centred
+   between the joystick (left) and the Up / Down buttons (right) */
+@media (pointer: coarse) and (max-height: 520px) {
+  .nav-search-container { width: min(300px, 36vw); }
+  .nav-results-list { max-height: calc(100dvh - var(--ns-hud-top) - var(--ns-target) - 32px); }
+  .nav-bottom-stack {
+    position: absolute;
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    bottom: var(--ns-hud-bottom);
+    z-index: 90;
+    display: flex;
+    flex-direction: column;
+    gap: var(--ns-space-2);
+    width: min(340px, calc(100% - 2 * (var(--ns-hud-left) + 120px)));
+    pointer-events: none;
+  }
+  .nav-route-card, .nav-poi-card {
+    position: relative; /* relative (not static) so the place card's grab handle can sit on it */
+    inset: auto;
+    transform: none;
+    width: auto;
+    max-width: none;
+  }
+  .nav-poi-card { padding: var(--ns-space-2) var(--ns-space-2) var(--ns-space-2) var(--ns-space-3); gap: 6px; }
+}

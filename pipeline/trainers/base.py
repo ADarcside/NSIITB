@@ -3,9 +3,8 @@ Namma Space: Trainer Protocol & Base Definitions (Phase 3)
 Defines the interface for Gaussian Splat training engines (Splatfacto, gsplat, Brush).
 """
 
-from typing import Any, Dict, List, Optional, Protocol, Tuple, Union
+from typing import Any, Dict, List, Optional, Protocol, Union
 from pathlib import Path
-import subprocess
 
 
 class Trainer(Protocol):

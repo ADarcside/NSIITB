@@ -21,7 +21,6 @@ from pipeline.common import (
     load_run_report,
     record_stage_result,
     should_skip_stage,
-    sha256_file,
     fail_gate,
     GateFailure,
 )
@@ -30,7 +29,6 @@ from pipeline.stages.s02_frames import (
     run_s02_frames,
     compute_laplacian_sharpness,
     compute_image_difference,
-    filter_frames,
 )
 
 FIXTURES_DIR = Path(__file__).resolve().parent.parent / "fixtures"

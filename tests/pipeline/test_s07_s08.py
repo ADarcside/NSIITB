@@ -20,7 +20,6 @@ from pipeline.stages.s07_compress import (
 )
 from pipeline.stages.s08_manifest import (
     run_s08_manifest,
-    build_manifest_data,
 )
 from pipeline.validator import validate_manifest
 

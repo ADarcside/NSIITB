@@ -6,10 +6,12 @@
 import * as THREE from 'three';
 import { ensureTokens } from './tokens.js';
 import { isTypingTarget } from './app_ui.js';
+import { isPhone } from './device.js';
 import { HATS, SLOT_COLORS, type CharacterDef } from '../avatars/catalog.js';
 import { Avatar } from '../avatars/avatar.js';
 import { MAX_NAME_LEN, formatRoomCode, type AvatarLook } from '../net/protocol.js';
 import type { MicState } from '../net/voice.js';
+import CSS from './mp_ui.css?raw';
 
 export interface LobbyResult {
   name: string;
@@ -44,132 +46,6 @@ export interface MpUIOptions {
 }
 
 const STYLE_ID = 'namma-mp-ui';
-const CSS = `
-  /* Above the HUD, search, minimap and touch controls (z 85-95), so nothing shows through on phones */
-  .mp-scrim { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; background: var(--ns-scrim);
-    font-family: var(--ns-font); color: var(--ns-text); padding: 16px; }
-  .mp-scrim[hidden] { display: none; }
-  .mp-card { width: min(560px, 100%); max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px); overflow: auto; overscroll-behavior: contain; background: var(--ns-surface-strong);
-    border: 1px solid var(--ns-border-strong); border-radius: var(--ns-radius-lg); box-shadow: var(--ns-shadow);
-    padding: var(--ns-space-5); display: grid; gap: var(--ns-space-4); }
-  .mp-card h2 { font-size: var(--ns-fs-xl); color: var(--ns-accent); letter-spacing: var(--ns-heading-ls); text-transform: uppercase; }
-  .mp-sub { font-size: var(--ns-fs-md); color: var(--ns-text-muted); line-height: 1.45; }
-  .mp-row { display: grid; grid-template-columns: 180px 1fr; gap: var(--ns-space-4); align-items: start; }
-  .mp-preview { width: 180px; height: 220px; border-radius: var(--ns-radius-md); background: radial-gradient(circle at 50% 40%, #26314f, #0d1220 70%);
-    border: 1px solid var(--ns-border); }
-  .mp-field { display: grid; gap: 6px; margin-bottom: var(--ns-space-3); }
-  .mp-label { font-size: var(--ns-fs-xs); text-transform: uppercase; letter-spacing: var(--ns-label-ls); color: var(--ns-text-subtle); }
-  .mp-input, .mp-select { font: inherit; font-size: var(--ns-fs-lg); color: var(--ns-text); background: var(--ns-input);
-    border: 1px solid var(--ns-border-strong); border-radius: var(--ns-radius-sm); padding: 8px 10px; width: 100%; }
-  .mp-select option { background: var(--ns-input-solid); }
-  .mp-chars { display: flex; flex-wrap: wrap; gap: 6px; }
-  .mp-chip { font: inherit; font-size: var(--ns-fs-sm); color: var(--ns-text); background: var(--ns-row); border: 1px solid var(--ns-row-border);
-    border-radius: var(--ns-radius-pill); padding: 6px 10px; cursor: pointer; }
-  .mp-chip:hover { background: var(--ns-row-hover); }
-  .mp-chip[aria-pressed="true"] { background: var(--ns-accent-soft); border-color: var(--ns-accent); color: var(--ns-accent); }
-  .mp-colors { display: flex; gap: 8px; }
-  .mp-colors input { width: 44px; height: 32px; border: 1px solid var(--ns-border-strong); border-radius: var(--ns-radius-sm); background: none; padding: 2px; cursor: pointer; }
-  .mp-note { font-size: var(--ns-fs-sm); color: var(--ns-text-subtle); line-height: 1.45; }
-  .mp-actions { display: flex; gap: var(--ns-space-2); justify-content: flex-end; }
-  .mp-btn { font: inherit; font-size: var(--ns-fs-md); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; cursor: pointer;
-    border-radius: var(--ns-radius-sm); padding: 10px 16px; border: 1px solid var(--ns-border-strong); background: var(--ns-row); color: var(--ns-text); }
-  .mp-btn:hover { background: var(--ns-row-hover); }
-  .mp-btn.primary { background: var(--ns-primary); color: var(--ns-on-accent); border: none; box-shadow: var(--ns-glow); }
-  .mp-btn.primary:hover { background: var(--ns-primary-hover); }
-  .mp-btn.small { padding: 5px 9px; font-size: var(--ns-fs-xs); }
-  .mp-btn.danger { border-color: var(--ns-danger-border); color: var(--ns-danger-text); }
-  .mp-btn:focus-visible, .mp-chip:focus-visible, .mp-input:focus-visible { outline: 2px solid var(--ns-focus); outline-offset: 2px; }
-
-  .mp-panel { position: fixed; z-index: 40; right: var(--ns-hud-right, 16px); top: calc(var(--ns-hud-top, 16px) + 64px); width: 250px;
-    font-family: var(--ns-font); color: var(--ns-text); background: var(--ns-surface); backdrop-filter: var(--ns-blur);
-    border: 1px solid var(--ns-border); border-radius: var(--ns-radius-lg); padding: var(--ns-space-3); display: grid; gap: var(--ns-space-2); }
-  .mp-panel[hidden] { display: none; }
-  .mp-code { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-  .mp-code b { font-size: var(--ns-fs-lg); color: var(--ns-accent); letter-spacing: 0.12em; }
-  .mp-status { font-size: var(--ns-fs-xs); color: var(--ns-text-subtle); text-transform: uppercase; letter-spacing: var(--ns-label-ls); }
-  .mp-status.offline { color: var(--ns-warn-text); }
-  .mp-roster { list-style: none; display: grid; gap: 4px; max-height: 210px; overflow: auto; }
-  .mp-roster li { display: flex; align-items: center; gap: 8px; font-size: var(--ns-fs-md); background: var(--ns-row); border-radius: var(--ns-radius-sm); padding: 5px 8px; }
-  .mp-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; box-shadow: 0 0 0 0 transparent; transition: box-shadow var(--ns-dur-fast, .12s); }
-  .mp-dot.speaking { box-shadow: 0 0 0 4px rgba(128, 237, 153, 0.55); }
-  .mp-roster .mp-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .mp-tools { display: flex; flex-wrap: wrap; gap: 6px; }
-  .mp-toast { position: fixed; z-index: 210; left: 50%; top: calc(var(--ns-hud-top, 16px) + 64px); transform: translateX(-50%);
-    font-family: var(--ns-font); font-size: var(--ns-fs-md); color: var(--ns-text); background: var(--ns-surface-strong);
-    border: 1px solid var(--ns-border-strong); border-radius: var(--ns-radius-pill); padding: 8px 16px; pointer-events: none; }
-  .mp-toast.warn { border-color: var(--ns-warn-border); color: var(--ns-warn-text); }
-  .mp-toast[hidden] { display: none; }
-  .ns-kbd-mp { font-size: 10px; opacity: .7; margin-left: 4px; }
-  .mp-code-actions { display: flex; align-items: center; gap: 6px; }
-  .mp-expand { display: none; width: 32px; height: 32px; padding: 0; place-items: center; border-radius: var(--ns-radius-sm);
-    border: 1px solid var(--ns-border-strong); background: var(--ns-row); color: var(--ns-text); cursor: pointer; font: inherit; }
-  .mp-expand svg { transition: transform var(--ns-dur-fast, .12s); }
-  .mp-panel:not(.mp-collapsed) .mp-expand svg { transform: rotate(180deg); }
-  /* Phones: the room panel is one slim glass row under the top bar, lined up with the search bar:
-     ROOM code . Copy invite . arrow. The arrow opens players and the Mic / Point / Character / Leave tools */
-  @media (max-width: 760px), (pointer: coarse) and (max-height: 520px) {
-    .mp-expand { display: grid; width: 36px; height: 36px; border-radius: var(--ns-radius-sm); }
-    .mp-panel { z-index: 91; left: var(--ns-hud-left, 16px); right: auto; width: auto;
-      max-width: calc(100% - var(--ns-hud-left, 16px) - var(--ns-hud-right, 16px));
-      padding: 3px 3px 3px var(--ns-space-3); gap: 0; overflow: auto; overscroll-behavior: contain;
-      border-radius: var(--ns-radius-lg); box-shadow: var(--ns-shadow); }
-    .mp-panel:not(.mp-collapsed) { width: 260px; padding: 3px var(--ns-space-3) var(--ns-space-3); gap: var(--ns-space-2); }
-    .mp-panel.mp-collapsed .mp-roster, .mp-panel.mp-collapsed .mp-tools { display: none; }
-    .mp-panel.mp-collapsed .mp-status:not(.offline) { display: none; }
-    .mp-panel:not(.mp-collapsed) .mp-code { margin-right: calc(-1 * var(--ns-space-3) + 3px); }
-    .mp-code { min-height: 38px; gap: var(--ns-space-3); }
-    .mp-code > div:first-child { display: flex; align-items: baseline; gap: 8px; white-space: nowrap; }
-    .mp-code .mp-label { font-size: 10px; }
-    .mp-code b { font-size: var(--ns-fs-md); letter-spacing: 0.1em; }
-    .mp-code-actions { gap: 4px; }
-    .mp-code-actions .mp-btn.small { min-height: 36px; padding: 0 12px; box-shadow: none; white-space: nowrap; }
-    .mp-tools { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-    .mp-tools .mp-btn.small { min-height: 36px; width: 100%; }
-  }
-  /* Portrait: under the top bar row; an open minimap moves down below it (--ns-mp-h) */
-  @media (max-width: 760px) {
-    .mp-panel { top: calc(var(--ns-hud-top, 16px) + 2 * var(--ns-target, 44px) + 32px);
-      max-height: calc(100dvh - var(--ns-hud-top, 16px) - 2 * var(--ns-target, 44px) - 32px - 230px); }
-  }
-  /* Phones (portrait and landscape): swipe the room bar left to tuck it into the screen edge (like a call
-     pop-up); a small tab stays at the edge and a tap or a swipe right brings it back */
-  .mp-tab { display: none; }
-  @media (max-width: 760px) {
-    /* Portrait: tucked, the tab sits in the empty left corner of the top bar row */
-    .mp-panel.mp-tucked { top: calc(var(--ns-hud-top, 16px) + var(--ns-target, 44px) + 16px); }
-  }
-  @media (max-width: 760px), (pointer: coarse) and (max-height: 520px) {
-    .mp-panel { transition: translate var(--ns-dur, .2s) var(--ns-ease-out, ease-out), top var(--ns-dur, .2s) var(--ns-ease-out, ease-out); touch-action: pan-y; }
-    .mp-panel.mp-dragging { transition: none; }
-    .mp-panel.mp-tucked { translate: calc(-100% - var(--ns-hud-left, 16px) + 30px) 0; overflow: visible; }
-    .mp-panel.mp-auto-tuck { transition-duration: .55s; }
-    /* After the room starts and the bar tucks itself away: about 1 s later the tab peeks out a little
-       and slides back once, like a drawer, so the eye finds it. No text. */
-    .mp-panel.mp-tucked.mp-hint { animation: mp-tab-nudge .9s cubic-bezier(.3, 0, .2, 1) 1; }
-    @keyframes mp-tab-nudge {
-      0%, 100% { translate: calc(-100% - var(--ns-hud-left, 16px) + 30px) 0; }
-      40% { translate: calc(-100% - var(--ns-hud-left, 16px) + 52px) 0; }
-    }
-    @media (prefers-reduced-motion: reduce) { .mp-panel.mp-tucked.mp-hint { animation: none; } }
-    .mp-panel.mp-tucked .mp-tab { display: grid; }
-    .mp-panel.mp-tucked > :not(.mp-tab) { visibility: hidden; }
-    .mp-tab { position: absolute; top: 0; right: 0; bottom: 0; width: 30px; place-items: center; padding: 0;
-      border: 0; border-radius: 0 var(--ns-radius-lg) var(--ns-radius-lg) 0; background: var(--ns-input-solid, #0d1220); color: var(--ns-accent);
-      cursor: pointer; font: inherit; }
-  }
-  /* Landscape: under the search bar on the left (the minimap is on the right) */
-  @media (pointer: coarse) and (max-height: 520px) {
-    .mp-panel { top: calc(var(--ns-hud-top, 16px) + var(--ns-target, 44px) + 14px);
-      max-height: calc(100dvh - var(--ns-hud-top, 16px) - var(--ns-target, 44px) - 14px - var(--ns-hud-bottom, 16px)); }
-    /* Short screens: while opened it may cover the joystick's top; the arrow folds it away again */
-  }
-  @media (max-width: 560px) { .mp-row { grid-template-columns: 1fr; } .mp-preview { width: 100%; height: 180px; } }
-`;
-
-/** Phone-sized screen: narrow portrait, or a short touch screen in landscape */
-function isPhoneScreen(): boolean {
-  return window.matchMedia?.('(max-width: 760px), (pointer: coarse) and (max-height: 520px)').matches ?? false;
-}
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -532,7 +408,7 @@ export class MpUI {
   private _scheduleAutoTuck(): void {
     window.clearTimeout(this._autoTuckTimer);
     window.clearTimeout(this._hintTimer);
-    if (!isPhoneScreen()) return;
+    if (!isPhone()) return;
     this._setCollapsed(false);
     const cancel = () => window.clearTimeout(this._autoTuckTimer);
     this._panel.addEventListener('pointerdown', cancel, { once: true });
@@ -562,7 +438,7 @@ export class MpUI {
   /** Phones: a left swipe on the room bar tucks it into the screen edge, a right swipe brings it back */
   private _setupTuckSwipe(): void {
     const panel = this._panel;
-    const onPhone = isPhoneScreen;
+    const onPhone = isPhone;
     let start: { x: number; y: number; id: number } | null = null;
     let dx = 0;
     let dragging = false;

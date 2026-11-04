@@ -13,7 +13,7 @@ from pathlib import Path
 import subprocess
 import sys
 import time
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, Optional, Union
 
 from pipeline.common import (
     load_config,

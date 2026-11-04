@@ -21,11 +21,12 @@ import { VanillaAppUI, isTypingTarget } from './ui/app_ui.js';
 import { NavUI } from './ui/nav_ui.js';
 import { RouteView } from './nav/route_view.js';
 import { MinimapUI } from './ui/minimap.js';
-import { TouchControls, isTouchDevice } from './controls/touch_controls.js';
+import { TouchControls } from './controls/touch_controls.js';
+import { isTouchDevice } from './ui/device.js';
 import { NavPlanner, type Point2 } from './nav/astar.js';
 import { validatePoiSet, PoiDraftStore } from './nav/pois.js';
 import { saveConfigFromEnv } from './nav/publish.js';
-import { TagUI } from './ui/tag_ui.js';
+import type { TagUI } from './ui/tag_ui.js';
 import { loadFeelSettings, mountFeelSettings } from './ui/walk_feel_settings.js';
 import {
   parseSceneParam,
@@ -423,6 +424,8 @@ async function bootstrap() {
     const initialDraft = isTagMode ? draftStore.load() : null;
 
     if (isTagMode) {
+      // Tag mode is for editors only, so its code loads on demand instead of for every visitor
+      const { TagUI } = await import('./ui/tag_ui.js');
       tagUI = new TagUI({
         sceneId: manifest.scene_id,
         getPose: () => movementController!.pose,
@@ -730,7 +733,7 @@ async function bootstrap() {
       // take it (and drop back to lite if it gets slow). ?quality=full or ?quality=lite overrides.
       const quality = searchParams.get('quality');
       const hasLite = Boolean(manifest.assets.lite && manifest.asset_table[manifest.assets.lite]);
-      const isTouch = window.matchMedia?.('(pointer: coarse)').matches ?? false;
+      const isTouch = isTouchDevice();
       const liteFirst = hasLite && quality !== 'full' && (isTouch || quality === 'lite');
       const upgradeToFull = liteFirst && quality !== 'lite';
 

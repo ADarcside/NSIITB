@@ -16,13 +16,10 @@ from pathlib import Path
 import shutil
 import sys
 import time
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Union
 
 from pipeline.common import (
-    load_config,
     load_run_report,
-    get_git_commit,
-    get_tool_versions,
     GateFailure,
 )
 from pipeline.stages.s01_validate import run_s01_validate

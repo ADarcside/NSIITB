@@ -18,8 +18,6 @@ import argparse
 import json
 from pathlib import Path
 import shutil
-import struct
-import os
 import subprocess
 import sys
 import time
@@ -30,7 +28,6 @@ import numpy as np
 from pipeline.common import (
     load_config,
     record_stage_result,
-    should_skip_stage,
     sha256_file,
     fail_gate,
     GateFailure,

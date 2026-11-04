@@ -31,12 +31,6 @@ export interface TouchControlsOptions {
   container?: HTMLElement;
 }
 
-/** True on phones and tablets, where there is no WASD and no mouse */
-export function isTouchDevice(): boolean {
-  if (typeof window === 'undefined' || !window.matchMedia) return false;
-  return window.matchMedia('(pointer: coarse)').matches;
-}
-
 const STICK_RADIUS = 52;
 /** Pulling the thumb this far past the centre (in radii) runs */
 const RUN_PULL = 1.45;

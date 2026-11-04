@@ -23,7 +23,6 @@ import numpy as np
 from pipeline.common import (
     load_config,
     record_stage_result,
-    should_skip_stage,
     fail_gate,
     GateFailure,
 )

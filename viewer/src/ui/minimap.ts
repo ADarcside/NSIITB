@@ -18,6 +18,8 @@ import type { Pose3D } from '../types.js';
 import type { Point2 } from '../nav/astar.js';
 import { decodeBase64ToBytes } from '../collision/grid.js';
 import { ensureTokens, THEME } from './tokens.js';
+import { isPhone, isTouchDevice } from './device.js';
+import MINIMAP_CSS from './minimap.css?raw';
 
 export interface MinimapMapping {
   minX: number;
@@ -37,12 +39,6 @@ export interface MinimapMapping {
  * Calculates world-to-pixel linear mapping for a NavGrid with North-up orientation.
  * Ensures aspect ratio is preserved and the grid is centered with padding.
  */
-/** Phone-sized screen: narrow portrait, or a short touch screen in landscape */
-export function isPhone(): boolean {
-  if (typeof window === 'undefined' || !window.matchMedia) return false;
-  return window.matchMedia('(max-width: 760px), (pointer: coarse) and (max-height: 520px)').matches;
-}
-
 export function calculateMinimapMapping(
   grid: NavGrid,
   canvasWidth: number,
@@ -193,7 +189,7 @@ export class MinimapUI {
   private _poiAt(px: number, py: number): POI | null {
     let closestPoi: POI | null = null;
     // 12 px click radius with a mouse, 20 px with a finger
-    let minDist = window.matchMedia?.('(pointer: coarse)').matches ? 20 : 12;
+    let minDist = isTouchDevice() ? 20 : 12;
     for (const poi of this._lastPois) {
       const pt = this.worldToPixel(poi.position.x, poi.position.z);
       const d = Math.hypot(pt.px - px, pt.py - py);
@@ -514,60 +510,7 @@ export class MinimapUI {
     if (document.getElementById('namma-minimap-style')) return;
     const style = document.createElement('style');
     style.id = 'namma-minimap-style';
-    style.textContent = `
-      .namma-minimap-container {
-        position: absolute;
-        bottom: var(--ns-hud-bottom);
-        right: var(--ns-hud-right);
-        z-index: 90;
-        padding: 4px;
-        background: var(--ns-surface-strong);
-        border: 1px solid var(--ns-border);
-        border-radius: var(--ns-radius-lg);
-        box-shadow: var(--ns-shadow);
-        pointer-events: auto;
-        user-select: none;
-        transform-origin: bottom right;
-        transition: opacity var(--ns-dur) var(--ns-ease-out), scale var(--ns-dur) var(--ns-ease-out),
-          display var(--ns-dur) allow-discrete;
-        @starting-style { opacity: 0; scale: 0.96; }
-      }
-      .namma-minimap-container.hidden {
-        display: none;
-        opacity: 0;
-        scale: 0.96;
-        transition-duration: var(--ns-dur-fast);
-      }
-      .namma-minimap-canvas {
-        display: block;
-        border-radius: calc(var(--ns-radius-lg) - 4px);
-        cursor: crosshair;
-      }
-      /* Narrow screens: top-right under the HUD row, clear of the bottom cards and the centre */
-      @media (max-width: 900px) {
-        .namma-minimap-container {
-          top: calc(var(--ns-hud-top) + var(--ns-target) + 16px);
-          bottom: auto;
-          transform-origin: top right;
-        }
-      }
-      @media (max-width: 760px) {
-        .namma-minimap-container {
-          /* --ns-mp-h: height of the multiplayer room bar above it (0 when there is none) */
-          top: calc(var(--ns-hud-top) + 2 * var(--ns-target) + 40px + var(--ns-mp-h, 0px));
-          padding: 3px;
-        }
-      }
-      /* Landscape phones: one top row, so the map sits right under it */
-      @media (pointer: coarse) and (max-height: 520px) {
-        .namma-minimap-container {
-          top: calc(var(--ns-hud-top) + var(--ns-target) + 14px);
-          bottom: auto;
-          padding: 3px;
-          transform-origin: top right;
-        }
-      }
-    `;
+    style.textContent = MINIMAP_CSS;
     document.head.appendChild(style);
   }
 }

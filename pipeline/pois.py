@@ -16,7 +16,6 @@ from typing import Any, Dict
 from pipeline.common import sha256_file
 from pipeline.grid import decode_free_bits, to_cell
 from pipeline.validator import (
-    ValidationError,
     load_and_validate_manifest,
     load_and_validate_pois,
     validate_manifest,

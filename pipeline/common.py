@@ -9,7 +9,6 @@ Provides:
 
 import hashlib
 import json
-import os
 from pathlib import Path
 import re
 import subprocess
@@ -44,11 +43,6 @@ def sha256_file(path: Union[str, Path]) -> str:
         while chunk := f.read(65536):
             h.update(chunk)
     return h.hexdigest()
-
-
-def sha256_bytes(data: bytes) -> str:
-    """Computes SHA-256 hex digest of bytes."""
-    return hashlib.sha256(data).hexdigest()
 
 
 def _parse_yaml_subset(text: str) -> Dict[str, Any]:
