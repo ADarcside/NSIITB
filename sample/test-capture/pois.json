@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "scene_id": "scn_hostelroomac",
-  "updated_at": "2026-11-04T00:29:14Z",
+  "updated_at": "2026-11-04T00:30:58Z",
   "pois": [
     {
       "schema_version": 1,
@@ -30,9 +30,9 @@
         "sleep"
       ],
       "position": {
-        "x": 0.023,
+        "x": -0.831,
         "y": 1.2,
-        "z": -0.652
+        "z": -0.775
       },
       "yaw_deg": 84
     },
