@@ -135,12 +135,24 @@ const CSS = `
      a small tab stays at the edge and a tap or a swipe right brings it back */
   .mp-tab { display: none; }
   @media (max-width: 760px) {
-    .mp-panel { transition: translate var(--ns-dur, .2s) var(--ns-ease-out, ease-out); touch-action: pan-y; }
+    .mp-panel { transition: translate var(--ns-dur, .2s) var(--ns-ease-out, ease-out), top var(--ns-dur, .2s) var(--ns-ease-out, ease-out); touch-action: pan-y; }
+    /* Tucked, the tab sits in the empty left corner of the top bar row */
+    .mp-panel.mp-tucked { top: calc(var(--ns-hud-top, 16px) + var(--ns-target, 44px) + 16px); }
     .mp-panel.mp-dragging { transition: none; }
-    .mp-panel.mp-tucked { translate: calc(-100% - var(--ns-hud-left, 16px) + 30px) 0; overflow: hidden; }
+    .mp-panel.mp-tucked { translate: calc(-100% - var(--ns-hud-left, 16px) + 30px) 0; overflow: visible; }
+    .mp-panel.mp-auto-tuck { transition-duration: .55s; }
+    /* After the room starts and the bar tucks itself away: about 1 s later the tab peeks out a little
+       and slides back once, like a drawer, so the eye finds it. No text. */
+    .mp-panel.mp-tucked.mp-hint { animation: mp-tab-nudge .9s cubic-bezier(.3, 0, .2, 1) 1; }
+    @keyframes mp-tab-nudge {
+      0%, 100% { translate: calc(-100% - var(--ns-hud-left, 16px) + 30px) 0; }
+      40% { translate: calc(-100% - var(--ns-hud-left, 16px) + 52px) 0; }
+    }
+    @media (prefers-reduced-motion: reduce) { .mp-panel.mp-tucked.mp-hint { animation: none; } }
     .mp-panel.mp-tucked .mp-tab { display: grid; }
+    .mp-panel.mp-tucked > :not(.mp-tab) { visibility: hidden; }
     .mp-tab { position: absolute; top: 0; right: 0; bottom: 0; width: 30px; place-items: center; padding: 0;
-      border: 0; border-left: 1px solid var(--ns-border); background: var(--ns-surface-strong); color: var(--ns-accent);
+      border: 0; border-radius: 0 var(--ns-radius-lg) var(--ns-radius-lg) 0; background: var(--ns-input-solid, #0d1220); color: var(--ns-accent);
       cursor: pointer; font: inherit; }
   }
   /* Landscape: under the search bar on the left (the minimap is on the right) */
@@ -234,6 +246,7 @@ export class MpUI {
   private readonly _panel: HTMLElement;
   private readonly _codeLabel: HTMLElement;
   private _expandBtn!: HTMLButtonElement;
+  private _publishH: () => void = () => {};
   private readonly _status: HTMLElement;
   private readonly _roster: HTMLElement;
   private readonly _micBtn: HTMLButtonElement;
@@ -398,8 +411,12 @@ export class MpUI {
     document.body.append(this._panel);
     // Phones: publish the panel's height so the portrait minimap can sit below it
     if (typeof ResizeObserver !== 'undefined') {
-      const publish = () =>
-        document.documentElement.style.setProperty('--ns-mp-h', `${Math.round(this._panel.getBoundingClientRect().height)}px`);
+      const publish = () => {
+        // Tucked into the top bar row it no longer pushes the minimap down
+        const h = this._panel.classList.contains('mp-tucked') ? 0 : this._panel.getBoundingClientRect().height;
+        document.documentElement.style.setProperty('--ns-mp-h', `${Math.round(h)}px`);
+      };
+      this._publishH = publish;
       new ResizeObserver(publish).observe(this._panel);
     }
 
@@ -494,13 +511,45 @@ export class MpUI {
     this._inRoom = true;
     this._codeLabel.textContent = formatRoomCode(code);
     this._setCollapsed(true); // only matters on phones; desktop always shows the full panel
-    this._panel.classList.remove('mp-tucked');
+    this._panel.classList.remove('mp-tucked', 'mp-hint');
     this._panel.hidden = false;
+    this._publishH();
+    this._scheduleAutoTuck();
+  }
+
+  private _autoTuckTimer = 0;
+  private _hintTimer = 0;
+
+  /** Portrait phones: the full room box (code, invite, players, tools) shows briefly, then slides into the
+   *  left edge by itself; a second later the tab nudges out and back once. Touching the box first keeps it open. */
+  private _scheduleAutoTuck(): void {
+    window.clearTimeout(this._autoTuckTimer);
+    window.clearTimeout(this._hintTimer);
+    if (!(window.matchMedia?.('(max-width: 760px)').matches ?? false)) return;
+    this._setCollapsed(false);
+    const cancel = () => window.clearTimeout(this._autoTuckTimer);
+    this._panel.addEventListener('pointerdown', cancel, { once: true });
+    this._autoTuckTimer = window.setTimeout(() => {
+      this._panel.removeEventListener('pointerdown', cancel);
+      if (!this._inRoom || this._panel.classList.contains('mp-tucked')) return;
+      // Slide the whole box in first, then fold it once it is out of sight
+      this._panel.classList.add('mp-auto-tuck', 'mp-tucked');
+      this._publishH();
+      window.setTimeout(() => this._panel.classList.contains('mp-tucked') && this._setCollapsed(true), 600);
+      this._hintTimer = window.setTimeout(() => {
+        this._panel.classList.remove('mp-auto-tuck');
+        if (!this._panel.classList.contains('mp-tucked')) return;
+        this._panel.classList.add('mp-hint');
+        this._hintTimer = window.setTimeout(() => this._panel.classList.remove('mp-hint'), 1000);
+      }, 1500);
+    }, 1600);
   }
 
   private _setTucked(tucked: boolean): void {
     if (tucked) this._setCollapsed(true);
+    else this._panel.classList.remove('mp-hint');
     this._panel.classList.toggle('mp-tucked', tucked);
+    this._publishH();
   }
 
   /** Portrait phones: a left swipe on the room bar tucks it into the screen edge, a right swipe brings it back */
