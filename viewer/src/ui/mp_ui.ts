@@ -131,13 +131,15 @@ const CSS = `
     .mp-panel { top: calc(var(--ns-hud-top, 16px) + 2 * var(--ns-target, 44px) + 32px);
       max-height: calc(100dvh - var(--ns-hud-top, 16px) - 2 * var(--ns-target, 44px) - 32px - 230px); }
   }
-  /* Portrait: swipe the room bar left to tuck it into the screen edge (like a call pop-up);
-     a small tab stays at the edge and a tap or a swipe right brings it back */
+  /* Phones (portrait and landscape): swipe the room bar left to tuck it into the screen edge (like a call
+     pop-up); a small tab stays at the edge and a tap or a swipe right brings it back */
   .mp-tab { display: none; }
   @media (max-width: 760px) {
-    .mp-panel { transition: translate var(--ns-dur, .2s) var(--ns-ease-out, ease-out), top var(--ns-dur, .2s) var(--ns-ease-out, ease-out); touch-action: pan-y; }
-    /* Tucked, the tab sits in the empty left corner of the top bar row */
+    /* Portrait: tucked, the tab sits in the empty left corner of the top bar row */
     .mp-panel.mp-tucked { top: calc(var(--ns-hud-top, 16px) + var(--ns-target, 44px) + 16px); }
+  }
+  @media (max-width: 760px), (pointer: coarse) and (max-height: 520px) {
+    .mp-panel { transition: translate var(--ns-dur, .2s) var(--ns-ease-out, ease-out), top var(--ns-dur, .2s) var(--ns-ease-out, ease-out); touch-action: pan-y; }
     .mp-panel.mp-dragging { transition: none; }
     .mp-panel.mp-tucked { translate: calc(-100% - var(--ns-hud-left, 16px) + 30px) 0; overflow: visible; }
     .mp-panel.mp-auto-tuck { transition-duration: .55s; }
@@ -163,6 +165,11 @@ const CSS = `
   }
   @media (max-width: 560px) { .mp-row { grid-template-columns: 1fr; } .mp-preview { width: 100%; height: 180px; } }
 `;
+
+/** Phone-sized screen: narrow portrait, or a short touch screen in landscape */
+function isPhoneScreen(): boolean {
+  return window.matchMedia?.('(max-width: 760px), (pointer: coarse) and (max-height: 520px)').matches ?? false;
+}
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -520,12 +527,12 @@ export class MpUI {
   private _autoTuckTimer = 0;
   private _hintTimer = 0;
 
-  /** Portrait phones: the full room box (code, invite, players, tools) shows briefly, then slides into the
+  /** Phones: the full room box (code, invite, players, tools) shows briefly, then slides into the
    *  left edge by itself; a second later the tab nudges out and back once. Touching the box first keeps it open. */
   private _scheduleAutoTuck(): void {
     window.clearTimeout(this._autoTuckTimer);
     window.clearTimeout(this._hintTimer);
-    if (!(window.matchMedia?.('(max-width: 760px)').matches ?? false)) return;
+    if (!isPhoneScreen()) return;
     this._setCollapsed(false);
     const cancel = () => window.clearTimeout(this._autoTuckTimer);
     this._panel.addEventListener('pointerdown', cancel, { once: true });
@@ -552,15 +559,15 @@ export class MpUI {
     this._publishH();
   }
 
-  /** Portrait phones: a left swipe on the room bar tucks it into the screen edge, a right swipe brings it back */
+  /** Phones: a left swipe on the room bar tucks it into the screen edge, a right swipe brings it back */
   private _setupTuckSwipe(): void {
     const panel = this._panel;
-    const portrait = () => window.matchMedia?.('(max-width: 760px)').matches ?? false;
+    const onPhone = isPhoneScreen;
     let start: { x: number; y: number; id: number } | null = null;
     let dx = 0;
     let dragging = false;
     panel.addEventListener('pointerdown', e => {
-      if (e.pointerType !== 'touch' || !portrait()) return;
+      if (e.pointerType !== 'touch' || !onPhone()) return;
       start = { x: e.clientX, y: e.clientY, id: e.pointerId };
       dx = 0;
       dragging = false;
