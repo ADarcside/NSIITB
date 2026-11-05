@@ -27,9 +27,9 @@
       "kind": "splat_lite",
       "format": "spz",
       "uri": "lite.spz",
-      "sha256": "e1a8b7d07289bd13f5b010041df833de603e2715bf53901af481a4dbfe996e85",
-      "bytes": 5174880,
-      "gaussians": 240615
+      "sha256": "8aafac3798077be4c97d3fbb4de0a6230eb6e5df8532a38bc2d2ddddcf01adb4",
+      "bytes": 13116181,
+      "gaussians": 601537
     },
     "ast_hostelroomgd": {
       "schema_version": 1,
