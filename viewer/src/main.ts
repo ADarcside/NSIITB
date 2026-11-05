@@ -731,14 +731,17 @@ async function bootstrap() {
       ui.showProgress(1.0);
     } else {
       // 7. Load Scene Asset (with lite fallback support)
-      // Laptops and desktops load the full scene directly. Touch devices open fast on lite (about
-      // 12% of the full download), then swap to the full scene once the frame rate shows they can
-      // take it (and drop back to lite if it gets slow). ?quality=full or ?quality=lite overrides.
+      // Laptops and desktops load the full scene directly. Phones and tablets stay on lite (about
+      // 30% of the splats, merged so detail survives): the full scene is too slow there, and
+      // swapping it back out froze iPhones, so they get no HD switch. ?quality=full or
+      // ?quality=lite overrides on any device.
       const quality = searchParams.get('quality');
       const hasLite = Boolean(manifest.assets.lite && manifest.asset_table[manifest.assets.lite]);
       const isTouch = isTouchDevice();
       const liteFirst = hasLite && quality !== 'full' && (isTouch || quality === 'lite');
-      const upgradeToFull = liteFirst && quality !== 'lite';
+      // Touch devices: lite only (no HD chip, no automatic upgrade) unless ?quality=full
+      const liteOnly = liteFirst && isTouch && quality !== 'full';
+      const upgradeToFull = liteFirst && quality !== 'lite' && !liteOnly;
 
       const loadedAsset = await loadSceneSplatAsset(manifest, {
         preferLite: liteFirst,
@@ -801,7 +804,7 @@ async function bootstrap() {
       let slowSamples = 0;
       let fastSamples = 0;
       const showQuality = () => {
-        if (!hasLite) return; // one asset only: nothing to switch
+        if (!hasLite || liteOnly) return; // one asset only, or a phone on lite: nothing to switch
         ui.setQuality(upgradeState === 'loading' ? 'loading' : onFull ? 'hd' : 'lite');
       };
       // Fetches the full scene and swaps it in. forced = the viewer tapped HD (no fallback to lite
