@@ -102,6 +102,16 @@ export class SparkSceneRenderer implements SceneRenderer {
     this._renderer.setPixelRatio(ratio);
   }
 
+  /**
+   * Phones on the full scene: slightly tighter splat edges and skip near-invisible splat pixels.
+   * Each splat covers fewer pixels, so the GPU draws much less for almost no visible change.
+   */
+  setFastSplats(on: boolean): void {
+    if (this._isDisposed) return;
+    this._spark.maxStdDev = on ? Math.sqrt(6) : Math.sqrt(8);
+    this._spark.minAlpha = on ? 2 / 255 : 0.5 / 255;
+  }
+
   get pixelRatio(): number {
     return this._renderer.getPixelRatio();
   }

@@ -35,10 +35,13 @@ import {
   fetchAssetWithVerification,
 } from './loader/manifest.js';
 import { ViewerError } from './types.js';
+import { preventPageZoom, resetPageZoom } from './ui/no_page_zoom.js';
 import type { NavGrid, POI } from './contracts/types.js';
 
 async function bootstrap() {
   const canvas = document.getElementById('viewer-canvas') as HTMLCanvasElement;
+  // Phones: the page never zooms (double tap, pinch, rotation, text boxes); see ui/no_page_zoom.ts
+  if (isTouchDevice()) preventPageZoom();
   if (!canvas) {
     throw new Error('Canvas element #viewer-canvas not found');
   }
@@ -780,6 +783,20 @@ async function bootstrap() {
       //  - fast on lite (>= 35 fps for 2 s at full resolution): fetch the full scene and swap it in
       const liteRef = { ...assetRef };
       let onFull = !loadedAsset.isLite;
+      // Render resolution per scene. Lite is light enough to draw at full sharpness (2x). On phones
+      // the full scene's ~2M splats at 2x are too slow, so HD draws at 1.25x with slightly tighter
+      // splat edges: every splat stays, so the detail stays, at a much smoother frame rate.
+      const liteRatio = Math.min(window.devicePixelRatio || 1, 2);
+      const fullRatio = isTouch ? Math.min(liteRatio, 1.25) : liteRatio;
+      const useFullScene = () => {
+        renderer.setPixelRatio(fullRatio);
+        renderer.setFastSplats(isTouch);
+      };
+      const useLiteScene = () => {
+        renderer.setPixelRatio(liteRatio);
+        renderer.setFastSplats(false);
+      };
+      if (onFull) useFullScene();
       let upgradeState: 'waiting' | 'loading' | 'done' = upgradeToFull ? 'waiting' : 'done';
       let slowSamples = 0;
       let fastSamples = 0;
@@ -801,8 +818,7 @@ async function bootstrap() {
             if (upgradeState === 'loading') {
               onFull = true;
               upgradeState = 'done';
-              // Full detail deserves full resolution again
-              renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+              useFullScene();
               console.info('[Viewer] Full-quality scene loaded');
             }
             showQuality();
@@ -813,16 +829,21 @@ async function bootstrap() {
             console.warn('[Viewer] Staying on the lite scene; full scene failed to load:', err);
           });
       };
-      const loadLite = () => {
+      // tapped = the viewer chose Lite (back to full sharpness); otherwise the FPS check sent us here
+      // and the lowered resolution stays
+      const loadLite = (tapped = false) => {
         if (!onFull || !hasLite) return;
         onFull = false;
         upgradeState = 'done';
-        void renderer.load(liteRef, () => {});
+        void renderer.load(liteRef, () => {}).then(() => {
+          if (tapped) useLiteScene();
+          else renderer.setFastSplats(false);
+        });
         showQuality();
       };
       onQualityToggle = () => {
         userChoseQuality = true;
-        if (onFull) loadLite();
+        if (onFull) loadLite(true);
         else loadFull();
       };
       showQuality();
@@ -941,11 +962,33 @@ async function bootstrap() {
     requestAnimationFrame(animate);
 
     // 9. Window Resize Handling
-    window.addEventListener('resize', () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
+    // Sized from the canvas box itself. Right after a phone rotation iOS can still report the old
+    // window size, so measure again once the rotation has settled (and snap any page zoom back).
+    let lastW = 0;
+    let lastH = 0;
+    const fitToScreen = () => {
+      const w = canvas.clientWidth || window.innerWidth;
+      const h = canvas.clientHeight || window.innerHeight;
+      if (w === lastW && h === lastH) return;
+      lastW = w;
+      lastH = h;
+      camera.aspect = w / h;
       camera.updateProjectionMatrix();
-      renderer.resize(window.innerWidth, window.innerHeight);
-    });
+      renderer.resize(w, h);
+    };
+    const fitAfterRotation = () => {
+      fitToScreen();
+      for (const ms of [150, 400, 800]) {
+        setTimeout(() => {
+          if (isTouchDevice()) resetPageZoom();
+          fitToScreen();
+        }, ms);
+      }
+    };
+    window.addEventListener('resize', fitAfterRotation);
+    window.addEventListener('orientationchange', fitAfterRotation);
+    window.visualViewport?.addEventListener('resize', fitToScreen);
+    fitToScreen();
   } catch (err: unknown) {
     if ((err as unknown as { handledByOffer?: boolean })?.handledByOffer) {
       return;
