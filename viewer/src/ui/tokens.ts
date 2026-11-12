@@ -162,7 +162,6 @@ export const TOKENS_CSS = `
     --ns-ld-glow: rgba(255, 215, 0, 0.55);
     --ns-ld-core-glow: rgba(233, 130, 46, 0.9);
     --ns-ld-name-glow: rgba(233, 130, 46, 0.35);
-    --ns-ld-credit: rgba(217, 203, 184, 0.78);
 
     /* Motion */
     --ns-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
@@ -393,6 +392,7 @@ const ICON_PATHS: Record<string, string> = {
   tag: '<path d="M3 12V4h8l10 10-8 8L3 12z"/><circle cx="7.5" cy="8.5" r="1.5"/>',
   users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14a6.5 6.5 0 0 1 3.5 6"/>',
   more: '<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>',
+  share: '<circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="m8.2 10.8 7.6-4.4M8.2 13.2l7.6 4.4"/>',
   tagOff: '<path d="M3 12V4h8l10 10-8 8L3 12z"/><circle cx="7.5" cy="8.5" r="1.5"/><path d="M3 3l18 18"/>',
 };
 

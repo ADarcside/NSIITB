@@ -153,3 +153,23 @@ def test_check_pois_with_grid(temp_scene: Path, tmp_path: Path, capsys):
     captured = capsys.readouterr()
     assert "Scene: scn_23j7x56k3y7a (1 POIs)" in captured.out
     assert "Meeting Table" in captured.out
+
+
+def test_approach_is_valid_and_checked(temp_scene: Path, tmp_path: Path, capsys):
+    """A tag on a wall may carry a standing spot; the schema accepts it and check reports it."""
+    from pipeline.pois import check_pois
+    from pipeline.validator import is_valid_pois
+
+    scene_id = "scn_23j7x56k3y7a"
+    pois_data = make_sample_pois(scene_id=scene_id)
+    pois_data["pois"][0]["approach"] = {"x": 0.4, "z": -0.6}
+    assert is_valid_pois(pois_data)
+    bad = json.loads(json.dumps(pois_data))
+    bad["pois"][0]["approach"] = {"x": 0.4}
+    assert not is_valid_pois(bad)
+
+    pois_file = tmp_path / "with_approach.json"
+    pois_file.write_text(json.dumps(pois_data), encoding="utf-8")
+    attach_pois(temp_scene, pois_file)
+    check_pois(temp_scene)
+    assert "via standing spot" in capsys.readouterr().out

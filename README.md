@@ -6,6 +6,7 @@
   <a href="https://adarcside.github.io/namma-space/"><img alt="Live demo" src="https://img.shields.io/badge/walk_the_room-live_demo-fbbf24?style=flat-square"></a>
   <img alt="Techfest IIT Bombay" src="https://img.shields.io/badge/Techfest_IIT_Bombay-Namma_Space_challenge-a78bfa?style=flat-square">
   <img alt="Gaussian splatting" src="https://img.shields.io/badge/3D-Gaussian_splatting-fb7185?style=flat-square">
+  <a href="https://github.com/ADarcside/NSIITB/actions/workflows/ci.yml?query=branch%3Around-2"><img alt="CI" src="https://github.com/ADarcside/NSIITB/actions/workflows/ci.yml/badge.svg?branch=round-2"></a>
   <a href="LICENSE"><img alt="MIT licence" src="https://img.shields.io/badge/licence-MIT-38bdf8?style=flat-square"></a>
 </p>
 
@@ -29,11 +30,6 @@ Our first real space is one of our own hostel rooms, K-720, bunks and all, filme
 ### → [adarcside.github.io/namma-space](https://adarcside.github.io/namma-space/)
 
 Laptops load the full scene straight away; phones start with a lighter version so the first view arrives fast on mobile data. Walls, beds and bunk posts are solid, and you can fly up with **E** to look over the top bunk.
-
-<!--
-  Walkthrough GIF goes here once it's cut from the demo video, e.g.
-  <p align="center"><img src="docs/assets/k720-walkthrough.gif" alt="Walking through K-720 in the browser" width="80%"></p>
--->
 
 ## Round 2: find a place, follow the path
 

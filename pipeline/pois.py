@@ -146,6 +146,10 @@ def check_pois(scene_dir: str | Path) -> None:
         x = pos.get("x", 0.0)
         z = pos.get("z", 0.0)
 
+        approach = poi.get("approach")
+        if approach is not None:
+            # Routes end at the standing spot, so that is the point that must be on walkable floor
+            x, z = approach["x"], approach["z"]
         if grid_data is not None and free_mask is not None:
             if isinstance(grid_data["origin"], (list, tuple)):
                 origin = (grid_data["origin"][0], grid_data["origin"][1])
@@ -161,7 +165,9 @@ def check_pois(scene_dir: str | Path) -> None:
         else:
             status = "no grid"
 
-        print(f"  - {name} ({x:.2f}, {z:.2f}) [{status}]")
+        if approach is not None:
+            status += ", via standing spot"
+        print(f"  - {name} ({pos.get('x', 0.0):.2f}, {pos.get('z', 0.0):.2f}) [{status}]")
 
 
 def main() -> None:

@@ -31,6 +31,19 @@ export interface SaveConfig {
 export interface SaveResult {
   liveCommit: string;
   sourceCommit?: string;
+  /** updated_at written into the new pois.json (the base for the next save) */
+  updatedAt: string;
+}
+
+export interface SaveOptions {
+  /**
+   * updated_at of the live pois.json these places were edited from (null: there was none). When
+   * given, the save stops with a conflict if the live file has changed since, so newer tags saved
+   * by someone else (or from another tab) are never wiped silently.
+   */
+  expectedBase?: string | null;
+  /** Save even when the live tags changed (the editor chose to overwrite them) */
+  force?: boolean;
 }
 
 const TOKEN_KEY = 'namma-save-token';
@@ -80,7 +93,9 @@ export class SaveError extends Error {
   constructor(
     message: string,
     /** True when the token was refused (wrong, expired or missing access) */
-    readonly badToken = false
+    readonly badToken = false,
+    /** True when the live tags changed since they were loaded (see SaveOptions.expectedBase) */
+    readonly conflict = false
   ) {
     super(message);
   }
@@ -96,8 +111,10 @@ async function sha256Hex(text: string): Promise<{ sha256: string; bytes: number 
 }
 
 /** pois.json text exactly as Export writes it */
-export function poiSetText(sceneId: Id, pois: POI[]): string {
-  return JSON.stringify(makePoiSet(sceneId, pois), null, 2) + '\n';
+export function poiSetText(sceneId: Id, pois: POI[], updatedAt?: string): string {
+  const set = makePoiSet(sceneId, pois);
+  if (updatedAt) set.updated_at = updatedAt;
+  return JSON.stringify(set, null, 2) + '\n';
 }
 
 /** New manifest text with the pois asset's sha256/bytes updated (and the asset added if missing). */
@@ -125,7 +142,7 @@ class GitHub {
     private readonly _fetch: Fetch
   ) {}
 
-  async call<T>(method: string, url: string, body?: unknown): Promise<T> {
+  async call<T>(method: string, url: string, body?: unknown, allow404 = false): Promise<T | null> {
     const res = await this._fetch(`${API}${url}`, {
       method,
       headers: {
@@ -138,6 +155,7 @@ class GitHub {
       cache: 'no-store',
     });
     if (res.status === 401) throw new SaveError('GitHub refused the key (wrong or expired).', true);
+    if (res.status === 404 && allow404) return null;
     if (res.status === 403 || res.status === 404) {
       throw new SaveError(`The key can't reach ${url.split('/').slice(2, 4).join('/')} (check its repository access).`, true);
     }
@@ -148,12 +166,15 @@ class GitHub {
     return (await res.json()) as T;
   }
 
-  /** Text of a file at the branch head (raw, uncached) */
-  async readText(t: SaveTarget, path: string): Promise<string> {
+  /** Text of a file at the branch head (raw, uncached); null when missing and allowMissing */
+  async readText(t: SaveTarget, path: string, allowMissing = false): Promise<string | null> {
     const r = await this.call<{ content: string; encoding: string }>(
       'GET',
-      `/repos/${t.owner}/${t.repo}/contents/${encodePath(path)}?ref=${encodeURIComponent(t.branch)}`
+      `/repos/${t.owner}/${t.repo}/contents/${encodePath(path)}?ref=${encodeURIComponent(t.branch)}`,
+      undefined,
+      allowMissing
     );
+    if (!r) return null;
     const bin = atob(r.content.replace(/\n/g, ''));
     return new TextDecoder().decode(Uint8Array.from(bin, c => c.charCodeAt(0)));
   }
@@ -162,17 +183,17 @@ class GitHub {
   async commitFiles(t: SaveTarget, files: Record<string, string>, message: string): Promise<string> {
     const repo = `/repos/${t.owner}/${t.repo}`;
     for (let attempt = 0; ; attempt++) {
-      const ref = await this.call<{ object: { sha: string } }>('GET', `${repo}/git/ref/heads/${encodePath(t.branch)}`);
-      const head = await this.call<{ tree: { sha: string } }>('GET', `${repo}/git/commits/${ref.object.sha}`);
-      const tree = await this.call<{ sha: string }>('POST', `${repo}/git/trees`, {
+      const ref = (await this.call<{ object: { sha: string } }>('GET', `${repo}/git/ref/heads/${encodePath(t.branch)}`))!;
+      const head = (await this.call<{ tree: { sha: string } }>('GET', `${repo}/git/commits/${ref.object.sha}`))!;
+      const tree = (await this.call<{ sha: string }>('POST', `${repo}/git/trees`, {
         base_tree: head.tree.sha,
         tree: Object.entries(files).map(([path, content]) => ({ path, mode: '100644', type: 'blob', content })),
-      });
-      const commit = await this.call<{ sha: string }>('POST', `${repo}/git/commits`, {
+      }))!;
+      const commit = (await this.call<{ sha: string }>('POST', `${repo}/git/commits`, {
         message,
         tree: tree.sha,
         parents: [ref.object.sha],
-      });
+      }))!;
       try {
         await this.call('PATCH', `${repo}/git/refs/heads/${encodePath(t.branch)}`, { sha: commit.sha, force: false });
         return commit.sha;
@@ -196,16 +217,30 @@ export async function savePoisLive(
   token: string,
   sceneId: Id,
   pois: POI[],
-  fetchImpl: Fetch = fetch.bind(globalThis)
+  fetchImpl: Fetch = fetch.bind(globalThis),
+  opts: SaveOptions = {}
 ): Promise<SaveResult> {
   const gh = new GitHub(token, fetchImpl);
-  const text = poiSetText(sceneId, pois);
+  const updatedAt = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+  const text = poiSetText(sceneId, pois, updatedAt);
   const { sha256, bytes } = await sha256Hex(text);
   const message = `tags: update ${pois.length} places`;
 
   const dir = config.live.path;
+  if (opts.expectedBase !== undefined && !opts.force) {
+    const liveText = await gh.readText(config.live, `${dir}/pois.json`, true);
+    let liveBase: string | null = null;
+    try {
+      liveBase = liveText ? ((JSON.parse(liveText) as { updated_at?: string }).updated_at ?? null) : null;
+    } catch {
+      liveBase = null;
+    }
+    if (liveBase !== opts.expectedBase) {
+      throw new SaveError('The live tags changed since you opened tag mode (saved from another tab or by someone else).', false, true);
+    }
+  }
   const manifestPath = `${dir}/manifest.json`;
-  const manifestText = await gh.readText(config.live, manifestPath);
+  const manifestText = (await gh.readText(config.live, manifestPath))!;
   const manifestScene = (JSON.parse(manifestText) as { scene_id?: string }).scene_id;
   if (manifestScene !== sceneId) {
     throw new SaveError(`The live manifest is for ${manifestScene}, not ${sceneId}.`);
@@ -220,5 +255,5 @@ export async function savePoisLive(
   if (config.source) {
     sourceCommit = await gh.commitFiles(config.source, { [config.source.path]: text }, message);
   }
-  return { liveCommit, sourceCommit };
+  return { liveCommit, sourceCommit, updatedAt };
 }

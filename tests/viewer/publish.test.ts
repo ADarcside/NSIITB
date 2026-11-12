@@ -8,7 +8,7 @@ import {
   savePoisLive,
   SaveError,
 } from '../../viewer/src/nav/publish.js';
-import { makePoi } from '../../viewer/src/nav/pois.js';
+import { makePoi, PoiDraftStore, samePois } from '../../viewer/src/nav/pois.js';
 
 const SCENE = 'scn_hostelroomac';
 
@@ -24,7 +24,7 @@ const manifest = {
 const manifestText = JSON.stringify(manifest, null, 2) + '\n';
 
 /** Tiny fake of the GitHub REST endpoints savePoisLive uses; records every write */
-function fakeGitHub(opts: { status?: number; moveOnce?: boolean } = {}) {
+function fakeGitHub(opts: { status?: number; moveOnce?: boolean; liveUpdatedAt?: string | null } = {}) {
   const writes: { method: string; url: string; body: any }[] = [];
   let moved = !opts.moveOnce;
   const json = (body: unknown, status = 200) =>
@@ -35,6 +35,11 @@ function fakeGitHub(opts: { status?: number; moveOnce?: boolean } = {}) {
     const body = init?.body ? JSON.parse(String(init.body)) : undefined;
     if (opts.status) return json({ message: 'nope' }, opts.status);
     if (method !== 'GET') writes.push({ method, url, body });
+    if (url.includes('/contents/') && url.includes('pois.json') && opts.liveUpdatedAt !== undefined) {
+      if (opts.liveUpdatedAt === null) return json({ message: 'Not Found' }, 404);
+      const live = JSON.stringify({ schema_version: 1, scene_id: SCENE, updated_at: opts.liveUpdatedAt, pois: [] });
+      return json({ content: Buffer.from(live).toString('base64'), encoding: 'base64' });
+    }
     if (url.includes('/contents/')) return json({ content: Buffer.from(manifestText).toString('base64'), encoding: 'base64' });
     if (url.includes('/git/ref/heads/')) return json({ object: { sha: 'head1' } });
     if (url.includes('/git/commits/')) return json({ tree: { sha: 'tree1' } });
@@ -114,5 +119,56 @@ describe('Save to live', () => {
   it('writes the same text as Export', () => {
     expect(poiSetText(SCENE, pois).endsWith('\n')).toBe(true);
     expect(JSON.parse(poiSetText(SCENE, pois)).scene_id).toBe(SCENE);
+  });
+
+  it('saves when the live tags are the ones the editor loaded, and returns the new base', async () => {
+    const { fetchImpl, writes } = fakeGitHub({ liveUpdatedAt: '2026-11-01T10:00:00Z' });
+    const res = await savePoisLive(config, 'tok', SCENE, pois, fetchImpl, { expectedBase: '2026-11-01T10:00:00Z' });
+    expect(res.updatedAt).toMatch(/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/);
+    const tree = writes.find(w => w.url.endsWith('/git/trees'))!;
+    const poisText = tree.body.tree.find((f: any) => f.path.endsWith('pois.json')).content;
+    expect(JSON.parse(poisText).updated_at).toBe(res.updatedAt);
+  });
+
+  it('refuses to wipe newer live tags (conflict), unless forced', async () => {
+    const { fetchImpl, writes } = fakeGitHub({ liveUpdatedAt: '2026-11-02T09:00:00Z' });
+    await expect(
+      savePoisLive(config, 'tok', SCENE, pois, fetchImpl, { expectedBase: '2026-11-01T10:00:00Z' })
+    ).rejects.toMatchObject({ conflict: true, badToken: false });
+    expect(writes).toHaveLength(0); // nothing was written
+    await savePoisLive(config, 'tok', SCENE, pois, fetchImpl, { expectedBase: '2026-11-01T10:00:00Z', force: true });
+    expect(writes.filter(w => w.method === 'PATCH').length).toBeGreaterThan(0);
+  });
+
+  it('treats a scene without pois.json as base null', async () => {
+    const { fetchImpl } = fakeGitHub({ liveUpdatedAt: null });
+    await expect(savePoisLive({ live: config.live }, 'tok', SCENE, pois, fetchImpl, { expectedBase: null })).resolves.toBeTruthy();
+    await expect(
+      savePoisLive({ live: config.live }, 'tok', SCENE, pois, fetchImpl, { expectedBase: '2026-11-01T10:00:00Z' })
+    ).rejects.toMatchObject({ conflict: true });
+  });
+});
+
+describe('tag draft base', () => {
+  it('remembers which live tags a draft was edited from', () => {
+    const mem = new Map<string, string>();
+    (globalThis as any).localStorage = {
+      getItem: (k: string) => mem.get(k) ?? null,
+      setItem: (k: string, v: string) => void mem.set(k, v),
+      removeItem: (k: string) => void mem.delete(k),
+    };
+    const store = new PoiDraftStore(SCENE);
+    store.save(pois);
+    expect(store.loadBase()).toBeUndefined(); // base unknown: old-style draft
+    store.base = '2026-11-01T10:00:00Z';
+    store.save(pois);
+    expect(new PoiDraftStore(SCENE).loadBase()).toBe('2026-11-01T10:00:00Z');
+    expect(new PoiDraftStore(SCENE).load()!.map(p => p.name)).toEqual(['Bunk 1', 'Study table']);
+    store.base = null;
+    store.save(pois);
+    expect(new PoiDraftStore(SCENE).loadBase()).toBeNull();
+    expect(samePois(pois, JSON.parse(JSON.stringify(pois)))).toBe(true);
+    expect(samePois(pois, pois.slice(1))).toBe(false);
+    delete (globalThis as any).localStorage;
   });
 });

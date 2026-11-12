@@ -24,8 +24,10 @@ import { MinimapUI } from './ui/minimap.js';
 import { TouchControls } from './controls/touch_controls.js';
 import { isTouchDevice } from './ui/device.js';
 import { NavPlanner, type Point2 } from './nav/astar.js';
-import { validatePoiSet, PoiDraftStore } from './nav/pois.js';
+import { validatePoiSet, PoiDraftStore, poiGoal } from './nav/pois.js';
 import { saveConfigFromEnv } from './nav/publish.js';
+import { shareUrl, resolvePoiRef } from './nav/share.js';
+import { activeRoute, arGuideLoader } from './nav/active_route.js';
 import type { TagUI } from './ui/tag_ui.js';
 import { loadFeelSettings, mountFeelSettings } from './ui/walk_feel_settings.js';
 import {
@@ -213,55 +215,56 @@ async function bootstrap() {
     let planner: NavPlanner | null = null;
     let loadedGrid: NavGrid | null = null;
     let targetPoi: POI | null = null;
+    /** Start of the route when it is another place ("From" picker or ?from=); null = from the walker */
+    let routeFrom: POI | null = null;
     let currentPathPoints: Point2[] | null = null;
     let lastPlanPose: { x: number; z: number } | null = null;
     let lastPlanTime = 0;
 
     const planRoute = (poi: POI, animate = true) => {
       targetPoi = poi;
+      if (routeFrom?.poi_id === poi.poi_id) routeFrom = null;
       if (!movementController) return;
       const pose = movementController.pose;
-      lastPlanPose = { x: pose.x, z: pose.z };
+      // A route from another place doesn't follow the walker, so it is never replanned as they move
+      const start = routeFrom ? poiGoal(routeFrom) : { x: pose.x, z: pose.z };
+      lastPlanPose = routeFrom ? null : { x: pose.x, z: pose.z };
       lastPlanTime = performance.now();
 
+      let lengthM: number | null;
       if (planner) {
-        const path = planner.findPath(
-          { x: pose.x, z: pose.z },
-          { x: poi.position.x, z: poi.position.z }
-        );
-        if (path) {
-          currentPathPoints = path.points;
-          routeView.setPath(path.points, animate);
-          navUI.setRoute(poi.name, path.lengthM);
-          routeView.setHighlight(poi.poi_id);
-        } else {
-          currentPathPoints = null;
-          routeView.setPath(null, animate);
-          navUI.setRoute(poi.name, null);
-          routeView.setHighlight(poi.poi_id);
-        }
+        const path = planner.findPath(start, poiGoal(poi));
+        currentPathPoints = path ? path.points : null;
+        lengthM = path ? path.lengthM : null;
+        navUI.setRoute(poi.name, lengthM);
       } else {
         // If there is no grid (Ghost-only scene), draw a straight line and append "(straight line, no floor map)"
-        const points: Point2[] = [
-          { x: pose.x, z: pose.z },
-          { x: poi.position.x, z: poi.position.z },
-        ];
-        const dist = Math.hypot(poi.position.x - pose.x, poi.position.z - pose.z);
-        currentPathPoints = points;
-        routeView.setPath(points, animate);
-        navUI.setRoute(poi.name, dist, ' (straight line, no floor map)');
-        routeView.setHighlight(poi.poi_id);
+        const goal = poiGoal(poi);
+        currentPathPoints = [start, goal];
+        lengthM = Math.hypot(goal.x - start.x, goal.z - start.z);
+        navUI.setRoute(poi.name, lengthM, ' (straight line, no floor map)');
       }
+      routeView.setPath(currentPathPoints, animate);
+      routeView.setHighlight(poi.poi_id);
+      navUI.setFromChoices(activePois, routeFrom?.poi_id ?? null, poi.poi_id);
+      activeRoute.set({ to: poi, from: routeFrom, points: currentPathPoints, lengthM });
+    };
+
+    /** Ends the route (cleared, or arrived) */
+    const endRoute = () => {
+      targetPoi = null;
+      routeFrom = null;
+      currentPathPoints = null;
+      routeView.setPath(null);
+      routeView.setHighlight(null);
+      activeRoute.set(null);
     };
 
     const getDistanceToPoi = (poi: POI): number | null => {
       if (!movementController) return null;
       const pose = movementController.pose;
       if (planner) {
-        const path = planner.findPath(
-          { x: pose.x, z: pose.z },
-          { x: poi.position.x, z: poi.position.z }
-        );
+        const path = planner.findPath({ x: pose.x, z: pose.z }, poiGoal(poi));
         return path ? path.lengthM : null;
       }
       return Math.hypot(poi.position.x - pose.x, poi.position.z - pose.z);
@@ -322,6 +325,14 @@ async function bootstrap() {
         return;
       }
       if (!currentPathPoints || currentPathPoints.length < 2) return;
+      if (routeFrom && targetPoi) {
+        // Route from another place: go to its start first, facing the way, then walk it from there
+        const [a, b] = currentPathPoints;
+        movementController.setPose({ x: a.x, z: a.z, yaw: Math.atan2(-(b.x - a.x), -(b.z - a.z)), pitch: 0 });
+        routeFrom = null;
+        planRoute(targetPoi, false);
+        if (!currentPathPoints || currentPathPoints.length < 2) return;
+      }
       navUI.setAutoWalking(true);
       movementController.startAutoWalk(
         currentPathPoints,
@@ -330,10 +341,7 @@ async function bootstrap() {
           if (targetPoi) {
             const arrivedName = targetPoi.name;
             celebrateArrival(currentPathPoints?.[currentPathPoints.length - 1]);
-            targetPoi = null;
-            currentPathPoints = null;
-            routeView.setPath(null);
-            routeView.setHighlight(null);
+            endRoute();
             navUI.showArrived(arrivedName);
           }
         },
@@ -351,12 +359,39 @@ async function bootstrap() {
         movementController.stopAutoWalk(true);
         navUI.setAutoWalking(false);
       }
-      targetPoi = null;
-      currentPathPoints = null;
-      routeView.setPath(null);
-      routeView.setHighlight(null);
+      endRoute();
       navUI.hidePoiCard();
     });
+
+    // Route card: start from you or from another place
+    navUI.onFromChange(id => {
+      routeFrom = id ? (activePois.find(p => p.poi_id === id) ?? null) : null;
+      if (targetPoi) planRoute(targetPoi, true);
+    });
+
+    // Place card: Share (link + QR code); the share dialog and QR encoder load only when used
+    navUI.onShare(poi => {
+      const from = targetPoi?.poi_id === poi.poi_id ? routeFrom : null;
+      void import('./ui/share_ui.js').then(({ openShareDialog }) =>
+        openShareDialog({
+          title: poi.name,
+          subtitle: from ? `Opens the route from ${from.name}` : 'Opens the room with the route to this place',
+          url: shareUrl(window.location.href, poi, from),
+        })
+      );
+    });
+
+    // AR guidance slot: the button shows only once an AR guide is registered and this device can run it
+    const loadAr = arGuideLoader();
+    if (loadAr) {
+      void loadAr()
+        .then(async guide => {
+          if (!(await guide.supported())) return;
+          activeRoute.subscribe(r => navUI.setArAvailable(Boolean(r?.points)));
+          navUI.onAr(() => void guide.start(activeRoute));
+        })
+        .catch(err => console.warn('[Viewer] AR guidance unavailable:', err));
+    }
 
     // If grid asset is defined in manifest, attempt to load it in background
     if (manifest.assets.grid && manifest.asset_table[manifest.assets.grid]) {
@@ -425,6 +460,7 @@ async function bootstrap() {
 
     const draftStore = new PoiDraftStore(manifest.scene_id);
     const initialDraft = isTagMode ? draftStore.load() : null;
+    const initialDraftBase = isTagMode ? draftStore.loadBase() : undefined;
 
     if (isTagMode) {
       // Tag mode is for editors only, so its code loads on demand instead of for every visitor
@@ -575,10 +611,28 @@ async function bootstrap() {
       });
     }
 
-    const applyPois = (poiList: POI[]) => {
+    /** updatedAt: the live pois.json's updated_at (null when the scene has none yet) */
+    // Shared links: ?to=<place> opens the route to it (from ?from=<place>, or from where you start)
+    let deepLinkDone = false;
+    const openDeepLink = () => {
+      if (deepLinkDone) return;
+      deepLinkDone = true;
+      const to = resolvePoiRef(activePois, searchParams.get('to'));
+      if (!to) {
+        if (searchParams.get('to')) console.warn('[Viewer] Link place not found:', searchParams.get('to'));
+        return;
+      }
+      routeFrom = resolvePoiRef(activePois, searchParams.get('from'));
+      navUI.showPoiCard(to, getDistanceToPoi(to));
+      planRoute(to, true);
+      lookAtPoi(to);
+    };
+
+    const applyPois = (poiList: POI[], updatedAt: string | null) => {
       manifestPois = poiList;
       if (tagUI) {
-        tagUI.setManifestPois(manifestPois);
+        if (initialDraft !== null) void tagUI.reconcileDraft(manifestPois, updatedAt, initialDraftBase);
+        else tagUI.setManifestPois(manifestPois, updatedAt);
       }
       if (!isTagMode || initialDraft === null) {
         activePois = poiList;
@@ -588,6 +642,7 @@ async function bootstrap() {
           tagUI.setPois(activePois);
         }
       }
+      openDeepLink();
     };
 
     const devPoisUrl = searchParams.get('pois');
@@ -603,9 +658,9 @@ async function bootstrap() {
             console.warn('[Viewer] Invalid dev pois.json:', errs);
             return;
           }
-          const poiList = (data as { pois: POI[] }).pois;
+          const { pois: poiList, updated_at } = data as { pois: POI[]; updated_at: string };
           console.info('[Viewer] Loaded POIs from manifest:', poiList.length);
-          applyPois(poiList);
+          applyPois(poiList, updated_at);
         } else if (manifest.assets.pois && manifest.asset_table[manifest.assets.pois]) {
           const poisAsset = manifest.asset_table[manifest.assets.pois];
           const buf = await fetchAssetWithVerification(poisAsset);
@@ -616,9 +671,12 @@ async function bootstrap() {
             console.warn('[Viewer] Invalid pois.json in manifest:', errs);
             return;
           }
-          const poiList = (data as { pois: POI[] }).pois;
+          const { pois: poiList, updated_at } = data as { pois: POI[]; updated_at: string };
           console.info('[Viewer] Loaded POIs from manifest:', poiList.length);
-          applyPois(poiList);
+          applyPois(poiList, updated_at);
+        } else {
+          // No places yet: tag mode still learns that the live site has none (for Save's check)
+          applyPois([], null);
         }
       } catch (err) {
         console.warn('[Viewer] Optional POIs could not be loaded:', err);
@@ -913,17 +971,14 @@ async function bootstrap() {
         }
 
         // Route progress & arrival check
-        if (targetPoi) {
+        if (targetPoi && !routeFrom) {
           if (currentPathPoints && currentPathPoints.length > 0) {
             const goal = currentPathPoints[currentPathPoints.length - 1];
             const distToGoal = Math.hypot(pose.x - goal.x, pose.z - goal.z);
             if (distToGoal < 0.6) {
               const arrivedName = targetPoi.name;
               celebrateArrival(goal);
-              targetPoi = null;
-              currentPathPoints = null;
-              routeView.setPath(null);
-              routeView.setHighlight(null);
+              endRoute();
               navUI.showArrived(arrivedName);
             } else if (
               !movementController.isAutoWalking &&

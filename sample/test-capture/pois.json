@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "scene_id": "scn_hostelroomac",
-  "updated_at": "2026-11-04T00:30:58Z",
+  "updated_at": "2026-11-12T18:40:00Z",
   "pois": [
     {
       "schema_version": 1,
@@ -10,8 +10,10 @@
       "name": "Front door",
       "category": "exit",
       "aliases": [
-        "Exit door",
-        "Main Door"
+        "Main door",
+        "Exit",
+        "Entrance",
+        "Way out"
       ],
       "position": {
         "x": -2.755,
@@ -25,9 +27,11 @@
       "poi_id": "poi_dnlu5uwe73yj",
       "scene_id": "scn_hostelroomac",
       "name": "Bunk 1",
-      "category": "furniture",
+      "category": "sleep",
       "aliases": [
-        "sleep"
+        "Bed 1",
+        "Bunk bed",
+        "Sleep"
       ],
       "position": {
         "x": -0.831,
@@ -41,9 +45,11 @@
       "poi_id": "poi_657dlzm7aw3q",
       "scene_id": "scn_hostelroomac",
       "name": "Bunk 2",
-      "category": "furniture",
+      "category": "sleep",
       "aliases": [
-        "sleep"
+        "Bed 2",
+        "Bunk bed",
+        "Sleep"
       ],
       "position": {
         "x": 0.342,
@@ -57,9 +63,11 @@
       "poi_id": "poi_wcfpfvxqhjiz",
       "scene_id": "scn_hostelroomac",
       "name": "Bunk 3",
-      "category": "furniture",
+      "category": "sleep",
       "aliases": [
-        "sleep"
+        "Bed 3",
+        "Bunk bed",
+        "Sleep"
       ],
       "position": {
         "x": 0.335,
@@ -73,9 +81,11 @@
       "poi_id": "poi_lhifzjgpkalw",
       "scene_id": "scn_hostelroomac",
       "name": "Table 1",
-      "category": "furniture",
+      "category": "study",
       "aliases": [
-        "study"
+        "Desk 1",
+        "Study table",
+        "Study"
       ],
       "position": {
         "x": -2.168,
@@ -89,10 +99,11 @@
       "poi_id": "poi_f3iyvqhscqtm",
       "scene_id": "scn_hostelroomac",
       "name": "Table 3",
-      "category": "furniture",
+      "category": "study",
       "aliases": [
-        "study",
-        "table"
+        "Desk 3",
+        "Study table",
+        "Study"
       ],
       "position": {
         "x": -1.35,
@@ -106,10 +117,12 @@
       "poi_id": "poi_jfq25nlptljy",
       "scene_id": "scn_hostelroomac",
       "name": "Tables 4 & 5",
-      "category": "furniture",
+      "category": "study",
       "aliases": [
-        "study",
-        "table"
+        "Table 4",
+        "Table 5",
+        "Desks 4 and 5",
+        "Study table"
       ],
       "position": {
         "x": 1.921,
@@ -123,10 +136,11 @@
       "poi_id": "poi_ain2eazgoars",
       "scene_id": "scn_hostelroomac",
       "name": "Table 6",
-      "category": "furniture",
+      "category": "study",
       "aliases": [
-        "study",
-        "table"
+        "Desk 6",
+        "Study table",
+        "Study"
       ],
       "position": {
         "x": 2.21,
@@ -140,10 +154,11 @@
       "poi_id": "poi_x3oq4fxwxufh",
       "scene_id": "scn_hostelroomac",
       "name": "Table 2",
-      "category": "furniture",
+      "category": "study",
       "aliases": [
-        "study",
-        "table"
+        "Desk 2",
+        "Study table",
+        "Study"
       ],
       "position": {
         "x": 0.081,
@@ -157,9 +172,11 @@
       "poi_id": "poi_3yc6yqa6737v",
       "scene_id": "scn_hostelroomac",
       "name": "Window",
-      "category": "furniture",
+      "category": "utility",
       "aliases": [
-        "curtains"
+        "Curtains",
+        "Fresh air",
+        "Daylight"
       ],
       "position": {
         "x": 2.493,
@@ -167,6 +184,78 @@
         "z": 0.101
       },
       "yaw_deg": -92
+    },
+    {
+      "schema_version": 1,
+      "poi_id": "poi_jam45f6c43tt",
+      "scene_id": "scn_hostelroomac",
+      "name": "Cupboard 1",
+      "category": "storage",
+      "aliases": [
+        "Almirah",
+        "Wardrobe",
+        "Closet"
+      ],
+      "description": "Built-in cupboard on the right of the front door (seen from inside)",
+      "position": {
+        "x": -2.5,
+        "y": 1.2,
+        "z": -1.1
+      }
+    },
+    {
+      "schema_version": 1,
+      "poi_id": "poi_twt4pxs75q4a",
+      "scene_id": "scn_hostelroomac",
+      "name": "Cupboard 2",
+      "category": "storage",
+      "aliases": [
+        "Almirah",
+        "Wardrobe",
+        "Closet"
+      ],
+      "description": "Built-in cupboard on the left of the front door (seen from inside)",
+      "position": {
+        "x": -2.5,
+        "y": 1.2,
+        "z": 1.1
+      }
+    },
+    {
+      "schema_version": 1,
+      "poi_id": "poi_kk54pjuysp2t",
+      "scene_id": "scn_hostelroomac",
+      "name": "Bookshelf",
+      "category": "storage",
+      "aliases": [
+        "Books",
+        "Shelf",
+        "Wall shelf"
+      ],
+      "description": "Wall shelf with books above Table 2",
+      "position": {
+        "x": 0.34,
+        "y": 1.6,
+        "z": -1.9
+      }
+    },
+    {
+      "schema_version": 1,
+      "poi_id": "poi_tdfngns62xih",
+      "scene_id": "scn_hostelroomac",
+      "name": "Posters",
+      "category": "decor",
+      "aliases": [
+        "Wall art",
+        "Pictures",
+        "Poster wall"
+      ],
+      "description": "Posters on the wall above Bunk 3",
+      "position": {
+        "x": 0.3,
+        "y": 1.8,
+        "z": 1.9
+      }
     }
   ]
 }

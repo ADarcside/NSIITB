@@ -18,6 +18,8 @@ import {
   makePoi,
   PoiDraftStore,
   downloadPoiSet,
+  approachFor,
+  samePois,
 } from '../nav/pois.js';
 import { savePoisLive, tokenStore, SaveError, type SaveConfig } from '../nav/publish.js';
 import { ensureTokens, icon, trapTab } from './tokens.js';
@@ -40,6 +42,8 @@ export interface TagUIOptions {
 interface ConfirmOptions {
   title: string;
   confirmLabel: string;
+  /** Default 'Cancel' */
+  cancelLabel?: string;
 }
 
 const NAV_CARD_OPEN = '.nav-poi-card:not(.hidden), .nav-route-card:not(.hidden)';
@@ -54,6 +58,8 @@ export class TagUI {
 
   private _pois: POI[] = [];
   private _manifestPois: POI[] = [];
+  /** updated_at of the live pois.json the places were loaded from (null: none; undefined: not loaded yet) */
+  private _liveBase: string | null | undefined = undefined;
   private _lastCategory: string = 'furniture';
   private _editingPoi: POI | null = null;
   private _isPanelCollapsed = false;
@@ -559,11 +565,23 @@ export class TagUI {
     poi.position.x = Math.round(x * 1000) / 1000;
     poi.position.z = Math.round(z * 1000) / 1000;
     const walkable = this._isWalkable ? this._isWalkable(x, z) : true;
+    // On a wall or furniture: where the editor stands says which side routes should reach
+    const approach = this._setApproach(poi);
     this._draftStore.save(this._pois);
     this._onPoisChange(this._pois);
     this._renderList();
-    this.showToast(`Placed ${poi.name}${walkable ? '' : ' (off the floor map, routes end at the nearest floor spot)'}`);
+    const where = walkable ? '' : approach ? ' (routes end where you are standing)' : ' (off the floor map, routes end at the nearest floor spot)';
+    this.showToast(`Placed ${poi.name}${where}`);
     return poi;
+  }
+
+  /** Sets or clears the tag's standing spot from the editor's position; returns it. */
+  private _setApproach(poi: POI): POI['approach'] {
+    const isWalkable = this._isWalkable ?? (() => true);
+    const approach = approachFor(poi.position, this._getPose(), isWalkable);
+    if (approach) poi.approach = approach;
+    else delete poi.approach;
+    return approach;
   }
 
   /**
@@ -587,8 +605,27 @@ export class TagUI {
     if (!ok) return;
     this._setSaving(true);
     try {
-      await savePoisLive(this._saveConfig, token, this._sceneId, this._pois);
-      this.setManifestPois(this._pois);
+      let res;
+      try {
+        res = await this._saveOnce(token, false);
+      } catch (err) {
+        if (!(err instanceof SaveError && err.conflict)) throw err;
+        // Someone (or another tab) saved after these places were loaded: never overwrite silently
+        this._setSaving(false);
+        const overwrite = await this._confirm({
+          title: `${err.message} Replace them with your ${n} place${n === 1 ? '' : 's'}?`,
+          confirmLabel: 'Replace live tags',
+          cancelLabel: 'Keep live tags',
+        });
+        if (!overwrite) {
+          this.showToast('Not saved. Reload the page to see the live tags, then redo your change.', 6000);
+          return;
+        }
+        this._setSaving(true);
+        res = await this._saveOnce(token, true);
+      }
+      this.setManifestPois(this._pois, res.updatedAt);
+      this._draftStore.save(this._pois);
       this.showToast('Saved. The live site updates in about a minute.', 5000);
     } catch (err) {
       if (err instanceof SaveError && err.badToken) {
@@ -601,6 +638,42 @@ export class TagUI {
     } finally {
       this._setSaving(false);
     }
+  }
+
+  private _saveOnce(token: string, force: boolean) {
+    // The conflict check needs to know what the places were loaded from; skip it until that is known
+    const opts = this._liveBase === undefined ? {} : { expectedBase: this._liveBase, force };
+    return savePoisLive(this._saveConfig!, token, this._sceneId, this._pois, undefined, opts);
+  }
+
+  /**
+   * Called once the live tags have loaded while a browser draft exists. A draft that started from
+   * these live tags (or matches them) is kept quietly; otherwise the live site moved on since the
+   * draft (another save, another editor), so the editor picks which to keep instead of an old draft
+   * winning silently. Either way the live tags become the draft's base.
+   */
+  async reconcileDraft(livePois: POI[], liveBase: string | null, draftBase: string | null | undefined): Promise<void> {
+    this.setManifestPois(livePois, liveBase);
+    const fromThisLive = draftBase !== undefined && draftBase === liveBase;
+    if (fromThisLive || livePois.length === 0 || samePois(this._pois, livePois)) {
+      this._draftStore.save(this._pois);
+      return;
+    }
+    const d = this._pois.length, l = livePois.length;
+    const useLive = await this._confirm({
+      title: `The live site has tags saved after your browser draft (live: ${l} place${l === 1 ? '' : 's'}, draft: ${d}). Use the live tags?`,
+      confirmLabel: 'Use live tags',
+      cancelLabel: 'Keep my draft',
+    });
+    if (useLive) {
+      this._pois = livePois.map(p => ({ ...p, position: { ...p.position }, ...(p.approach ? { approach: { ...p.approach } } : {}) }));
+      this._onPoisChange(this._pois);
+      this._renderList();
+      this.showToast(`Loaded the live tags (${l} places)`);
+    } else {
+      this.showToast('Kept your draft. Save to live will replace the live tags.', 5000);
+    }
+    this._draftStore.save(this._pois);
   }
 
   private _setSaving(on: boolean): void {
@@ -638,8 +711,13 @@ export class TagUI {
     resolve?.(key);
   }
 
-  setManifestPois(pois: POI[]): void {
+  /** The live tags (and the updated_at of their pois.json, when known) that Clear draft and Save compare against */
+  setManifestPois(pois: POI[], updatedAt?: string | null): void {
     this._manifestPois = pois.map(p => ({ ...p }));
+    if (updatedAt !== undefined) {
+      this._liveBase = updatedAt;
+      this._draftStore.base = updatedAt;
+    }
   }
 
   setPois(pois: POI[]): void {
@@ -726,6 +804,7 @@ export class TagUI {
     document.exitPointerLock?.();
     this._confirmTitle.textContent = opts.title;
     this._confirmOkBtn.textContent = opts.confirmLabel;
+    this._confirmCancelBtn.textContent = opts.cancelLabel ?? 'Cancel';
     this._confirmReturnFocus = document.activeElement as HTMLElement | null;
     this._confirmOverlay.classList.remove('hidden');
     // The safe choice has focus, so Enter right after the click doesn't delete anything
@@ -899,6 +978,7 @@ export class TagUI {
         poi.position.x = Math.round(pose.x * 1000) / 1000;
         poi.position.z = Math.round(pose.z * 1000) / 1000;
         poi.yaw_deg = Math.round((pose.yaw * 180) / Math.PI);
+        this._setApproach(poi);
 
         const walkable = this._isWalkable ? this._isWalkable(pose.x, pose.z) : true;
         this._draftStore.save(this._pois);

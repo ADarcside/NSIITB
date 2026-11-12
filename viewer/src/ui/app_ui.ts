@@ -31,8 +31,12 @@ export function isTypingTarget(e: KeyboardEvent): boolean {
   return false;
 }
 
-/** Display name and kind for a scene id on the loading screen. Unknown scenes show their id. */
-export function roomLabel(sceneId: string): { name: string; kind: string } {
+/** Display name and kind for a scene id (or a manifest URL) on the loading screen. Unknown scenes show their id. */
+export function roomLabel(scene: string): { name: string; kind: string } {
+  // A full manifest URL (".../scn_hostelroomac/manifest.json") names its scene by the folder it sits in
+  const parts = scene.split(/[?#]/)[0].split('/').filter(Boolean);
+  if (parts.length > 1 && /\.json$/i.test(parts[parts.length - 1])) parts.pop();
+  const sceneId = parts.length ? parts[parts.length - 1] : scene;
   const known: Record<string, { name: string; kind: string }> = {
     scn_hostelroomac: { name: 'K-720', kind: 'Hostel room' },
   };
@@ -386,7 +390,6 @@ export class VanillaAppUI implements AppUI {
           <p class="ld-tip"><span class="ld-tip-tag">Tip</span><span class="ld-tip-text"></span></p>
         </div>
       </div>
-      ${import.meta.env.VITE_MP_URL ? '' : '<p class="ld-credit">Namma Space · Team NoGrass · Techfest IIT Bombay 2026, Round 2</p>'}
     `;
     const q = (sel: string) => this._progressContainer.querySelector(sel) as HTMLElement;
     this._roomName = q('.ld-room');

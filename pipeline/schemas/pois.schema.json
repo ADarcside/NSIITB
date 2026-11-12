@@ -83,6 +83,23 @@
             },
             "additionalProperties": false
           },
+          "approach": {
+            "description": "Where a visitor stands to reach this place (world metres on the floor). Routes end here. Set by tag mode when a tag sits on a wall or furniture, so routes reach the side it was tagged from.",
+            "type": "object",
+            "required": [
+              "x",
+              "z"
+            ],
+            "properties": {
+              "x": {
+                "type": "number"
+              },
+              "z": {
+                "type": "number"
+              }
+            },
+            "additionalProperties": false
+          },
           "yaw_deg": {
             "type": "number"
           },

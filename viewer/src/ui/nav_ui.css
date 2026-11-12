@@ -144,7 +144,7 @@
   display: flex;
   align-items: center;
   gap: var(--ns-space-2);
-  max-width: min(560px, calc(100% - 2 * var(--ns-edge)));
+  max-width: min(680px, calc(100% - 2 * var(--ns-edge)));
   border: 1px solid var(--ns-route-soft);
   border-radius: var(--ns-radius-lg);
   padding: 5px 5px 5px 16px;
@@ -161,6 +161,91 @@
   white-space: nowrap;
 }
 .nav-route-content strong { color: var(--ns-route); font-weight: 700; }
+.nav-route-time {
+  margin-left: 6px;
+  color: var(--ns-text-muted);
+  font-size: var(--ns-fs-sm);
+}
+/* Route start picker: a black chip with gold text, and a matching list that opens upwards */
+.nav-route-from {
+  position: relative;
+  flex: none;
+  max-width: 34%;
+  margin-left: -8px;
+}
+.nav-route-from.hidden { display: none; }
+.nav-from-btn {
+  display: block;
+  width: 100%;
+  min-height: 32px;
+  padding: 0 24px 0 10px;
+  border: 1px solid var(--ns-accent-ring);
+  border-radius: var(--ns-radius-sm);
+  background: #05070d url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23FFD700' stroke-width='1.6'/%3E%3C/svg%3E") no-repeat right 8px center;
+  color: var(--ns-accent);
+  font: 600 var(--ns-fs-sm)/1 var(--ns-font);
+  letter-spacing: 0.02em;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: border-color var(--ns-dur-fast) ease, box-shadow var(--ns-dur-fast) ease;
+}
+.nav-from-btn:hover { border-color: var(--ns-accent); }
+.nav-route-from.open .nav-from-btn,
+.nav-from-btn:focus-visible { outline: none; border-color: var(--ns-accent); box-shadow: 0 0 0 3px var(--ns-accent-ring); }
+.nav-route-from.open .nav-from-btn { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 5l4-4 4 4' fill='none' stroke='%23FFD700' stroke-width='1.6'/%3E%3C/svg%3E"); }
+.nav-from-list {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 8px);
+  z-index: 5;
+  min-width: max(100%, 200px);
+  max-width: min(320px, 80vw);
+  max-height: min(260px, 45vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: rgba(5, 7, 13, 0.97);
+  border: 1px solid var(--ns-accent-ring);
+  border-radius: var(--ns-radius-md);
+  box-shadow: var(--ns-shadow), 0 0 0 1px rgba(0, 0, 0, 0.4);
+  scrollbar-width: thin;
+  scrollbar-color: var(--ns-accent-ring) transparent;
+}
+.nav-from-list.hidden { display: none; }
+.nav-from-option {
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: var(--ns-radius-sm);
+  color: var(--ns-accent);
+  font: 500 var(--ns-fs-md)/1.2 var(--ns-font);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.nav-from-option.active { background: var(--ns-accent-soft); box-shadow: inset 2px 0 0 var(--ns-accent); }
+.nav-from-option[aria-selected="true"] { font-weight: 700; }
+.nav-from-option[aria-selected="true"]::after { content: "\2713"; margin-left: auto; padding-left: 12px; font-size: var(--ns-fs-sm); }
+.nav-poi-share { color: var(--ns-text-muted); }
+.nav-route-ar-btn {
+  flex: none;
+  min-height: var(--ns-target);
+  padding: 0 12px;
+  border: 1px solid var(--ns-route-soft);
+  border-radius: var(--ns-radius-sm);
+  background: transparent;
+  color: var(--ns-route);
+  font-weight: 700;
+  cursor: pointer;
+}
+.nav-route-ar-btn.hidden { display: none; }
 .nav-route-dist {
   margin-left: 6px;
   font-weight: 700;
@@ -417,4 +502,13 @@
     max-width: none;
   }
   .nav-poi-card { padding: var(--ns-space-2) var(--ns-space-2) var(--ns-space-2) var(--ns-space-3); gap: 6px; }
+}
+
+/* Phones: the route's start picker gets its own row, so the destination and distance stay readable */
+@media (max-width: 760px), (pointer: coarse) and (max-width: 900px) {
+  .nav-route-card { flex-wrap: wrap; row-gap: 6px; padding-top: 6px; }
+  .nav-route-from { flex: 0 0 calc(100% + 10px); max-width: none; margin-left: -10px; margin-right: 0; }
+  .nav-from-btn { min-height: 40px; font-size: var(--ns-fs-md); }
+  .nav-from-list { max-width: none; right: 0; }
+  .nav-from-option { min-height: 44px; }
 }

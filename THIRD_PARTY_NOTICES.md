@@ -19,6 +19,7 @@ This document registers all third-party software components, libraries, and tool
 | **NumPy** | BSD-3-Clause | Fast numerical arrays & custom PLY I/O | https://github.com/numpy/numpy |
 | **SciPy** (1.18.1) | BSD-3-Clause | Scientific algorithms & spatial filtering | https://github.com/scipy/scipy |
 | **OpenCV** (opencv-python-headless 4.14.0.94) | Apache-2.0 | Frame validation & Laplacian sharpness | https://github.com/opencv/opencv |
+| **uqr** (0.1.2) | MIT | QR codes in the Share dialog (loaded only when someone shares) | https://github.com/unjs/uqr |
 | **Vite** | MIT | Frontend build tool and development server | https://github.com/vitejs/vite |
 | **Vitest** | MIT | Frontend unit and contract testing | https://github.com/vitest-dev/vitest |
 | **TypeScript** (5.9.3) | Apache-2.0 | Type safety and schema contract generation | https://github.com/microsoft/TypeScript |

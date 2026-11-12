@@ -5,7 +5,7 @@
 import { describe, it, expect } from 'vitest';
 import { NavPlanner } from '../../viewer/src/nav/astar.js';
 import { searchPois } from '../../viewer/src/nav/search.js';
-import { makePoi, validatePoiSet, makePoiSet } from '../../viewer/src/nav/pois.js';
+import { makePoi, validatePoiSet, makePoiSet, approachFor, poiGoal } from '../../viewer/src/nav/pois.js';
 import type { NavGrid } from '../../viewer/src/contracts/types.js';
 
 /** NavGrid from rows of '.' (free) and '#' (blocked); row 0 is the smallest z. */
@@ -72,6 +72,40 @@ describe('NavPlanner', () => {
     expect(p.findPath({ x: 0.15, z: 0.15 }, tag, 2.0)).toBeNull(); // the old 2 m snap could not reach it
   });
 
+  it('routes a tag on furniture to the floor you can reach, not into a closed-off pocket', () => {
+    // A cupboard (#) with a sealed pocket behind it; the tag sits on the cupboard, nearer the pocket
+    const rows = [
+      '..........',
+      '..........',
+      '..........',
+      '##########',
+      '##########',
+      '####...###',
+      '##########',
+    ];
+    const p = new NavPlanner(gridFrom(rows));
+    const tag = { x: 0.55, z: 0.45 }; // on the cupboard: 0.1 m from the pocket, 0.2 m from the room
+    const path = p.findPath({ x: 0.15, z: 0.15 }, tag)!;
+    expect(path).not.toBeNull();
+    const end = path.points[path.points.length - 1];
+    expect(end.z).toBeLessThan(0.3); // ends in the open room, not inside the pocket
+  });
+
+  it('reuses its work when the walker moves along a route (same answer as a fresh planner)', () => {
+    const p = new NavPlanner(gridFrom(ROOM));
+    const goal = { x: 1.55, z: 0.85 };
+    const starts = [{ x: 0.55, z: 0.85 }, { x: 0.65, z: 0.55 }, { x: 0.95, z: 0.15 }, { x: 1.85, z: 0.15 }, { x: 0.15, z: 0.95 }];
+    for (const s of starts) {
+      const reused = p.findPath(s, goal)!;
+      const fresh = new NavPlanner(gridFrom(ROOM)).findPath(s, goal)!;
+      expect(reused.lengthM).toBeCloseTo(fresh.lengthM, 6);
+      expect(reused.points).toEqual(fresh.points);
+    }
+    // A second goal in between (a place card's distance) and back again
+    p.findPath(starts[0], { x: 0.15, z: 0.15 });
+    expect(p.findPath(starts[1], goal)!.lengthM).toBeCloseTo(new NavPlanner(gridFrom(ROOM)).findPath(starts[1], goal)!.lengthM, 6);
+  });
+
   it('gives a straight two-point path across open floor', () => {
     const open = Array.from({ length: 20 }, () => '.'.repeat(20));
     const path = new NavPlanner(gridFrom(open)).findPath({ x: 0.5, z: 0.5 }, { x: 1.55, z: 1.55 })!;
@@ -108,5 +142,42 @@ describe('searchPois', () => {
   it('validates a POI set', () => {
     expect(validatePoiSet(makePoiSet(s, pois))).toEqual([]);
     expect(validatePoiSet({ schema_version: 1, scene_id: s, pois: [{ name: '' }] }).length).toBeGreaterThan(0);
+  });
+});
+
+describe('standing spot (approach)', () => {
+  // A wall at x = 1.0 splits two rooms joined by a door at the far end
+  const ROOMS = [
+    '..........#..........',
+    '..........#..........',
+    '..........#..........',
+    '..........#..........',
+    '.....................',
+  ];
+  const p = new NavPlanner(gridFrom(ROOMS));
+  const walk = (x: number, z: number) => p.isWalkable(x, z);
+
+  it('is only set for a tag off the floor, from a nearby editor standing on the floor', () => {
+    expect(approachFor({ x: 0.5, z: 0.15 }, { x: 0.3, z: 0.15 }, walk)).toBeUndefined(); // tag on floor
+    expect(approachFor({ x: 1.05, z: 0.15 }, { x: 0.75, z: 0.15 }, walk)).toEqual({ x: 0.75, z: 0.15 });
+    expect(approachFor({ x: 1.05, z: 0.15 }, { x: 1.05, z: 0.25 }, walk)).toBeUndefined(); // editor in the wall
+    expect(approachFor({ x: 1.05, z: 0.15 }, { x: 1.05, z: 0.15 + 5 }, () => true)).toBeUndefined(); // too far
+  });
+
+  it('routes to the side of the wall the tag was made from', () => {
+    // Tag on the wall, a hair nearer the right-hand room, tagged by someone standing in the left room
+    const poi = makePoi('scn_aaaaaaaaaaaa', 'Whiteboard', 1.07, 0.15);
+    const start = { x: 0.25, z: 0.15 };
+    const plain = p.findPath(start, poiGoal(poi))!;
+    expect(plain.points[plain.points.length - 1].x).toBeGreaterThan(1.0); // goes round to the right room
+    poi.approach = approachFor(poi.position, { x: 0.85, z: 0.15 }, walk);
+    const viaSpot = p.findPath(start, poiGoal(poi))!;
+    expect(viaSpot.points[viaSpot.points.length - 1].x).toBeLessThan(1.0);
+    expect(viaSpot.lengthM).toBeLessThan(plain.lengthM);
+  });
+
+  it('is validated when present', () => {
+    const poi = { ...makePoi('scn_aaaaaaaaaaaa', 'Desk', 0, 0), approach: { x: 1 } };
+    expect(validatePoiSet(makePoiSet('scn_aaaaaaaaaaaa', [poi as never])).join()).toMatch(/approach/);
   });
 });

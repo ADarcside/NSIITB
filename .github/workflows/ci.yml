@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  viewer:
+    name: Viewer (typecheck, tests, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: viewer
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: viewer/package-lock.json
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: pip install numpy==2.5.3
+      - run: npm ci
+      - name: Make the synthetic dev scene the tests load
+        run: npm run make:dev-scene
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  relay:
+    name: Multiplayer relay (typecheck, tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: multiplayer/relay
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: multiplayer/relay/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+  pipeline:
+    name: Pipeline (pytest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements-tools.txt
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      # S01/S02 tests cut frames from a synthetic video with ffmpeg
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+      # The tests stub COLMAP, training and Open3D, so the heavy GPU packages are not needed here
+      - run: pip install pytest==9.1.1 jsonschema==4.23.0 numpy==2.5.3 scipy==1.18.1 opencv-python-headless==4.14.0.94
+      - name: Make the synthetic dev scene the contract tests check
+        run: python scripts/make_dev_scene.py
+      - run: python -m pytest -q tests/pipeline

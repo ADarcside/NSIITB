@@ -179,7 +179,8 @@ export interface ReconJob {
 
 /**
  * Point of interest (Round 2). position is in world metres: x, z on the floor plan where the POI is,
- * y the label height above the floor. Navigation goes to the nearest walkable cell to (x, z).
+ * y the label height above the floor. Navigation goes to `approach` when set, else to the nearest
+ * walkable cell to (x, z).
  */
 export interface POI {
   schema_version: 1;
@@ -191,6 +192,11 @@ export interface POI {
   aliases?: string[];
   description?: string;
   position: { x: number; y: number; z: number };
+  /**
+   * Where a visitor stands to reach it (world metres on the floor); routes end here. Tag mode sets it
+   * when a tag sits on a wall or furniture, so a route reaches the side it was tagged from.
+   */
+  approach?: { x: number; z: number };
   yaw_deg?: number;
   metadata?: Record<string, unknown>;
 }

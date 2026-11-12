@@ -403,26 +403,11 @@
 }
 .ld-tip-text { transition: opacity var(--ns-dur-fast) ease; }
 .ld-tip-text.is-swapping { opacity: 0; }
-.ld-credit {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: max(22px, env(safe-area-inset-bottom));
-  margin: 0;
-  padding: 0 20px;
-  text-align: center;
-  font-size: var(--ns-fs-xs);
-  font-weight: 600;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--ns-ld-credit);
-}
 @media (prefers-reduced-motion: reduce) {
   .ld-sky, .ld-gate-spin, .ld-stage-wrap { animation: none; }
 }
 @media (max-width: 760px) {
   .ld-panel { padding: 18px 18px 16px; }
-  .ld-credit { letter-spacing: 0.1em; line-height: 1.6; }
 }
 
 /* ---------- Error panel ---------- */

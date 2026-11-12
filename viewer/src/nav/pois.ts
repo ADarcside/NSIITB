@@ -15,10 +15,34 @@ export function newId(prefix: string): Id {
   return `${prefix}_${Array.from(bytes, b => BASE32[b & 31]).join('')}`;
 }
 
+/** Farthest an editor may stand from a tag for that spot to become the tag's standing spot (m) */
+export const APPROACH_MAX_M = 4.0;
+
+/** Where routes to this place end: its standing spot when it has one, else the tag itself. */
+export function poiGoal(poi: POI): { x: number; z: number } {
+  return poi.approach ?? { x: poi.position.x, z: poi.position.z };
+}
+
+/**
+ * Standing spot for a tag put at `spot` by an editor standing at `stand`, or undefined when the
+ * tag needs none (it sits on walkable floor) or the editor is not a usable reference (off the floor
+ * or too far away, e.g. dragging a dot on the minimap from across the room).
+ */
+export function approachFor(
+  spot: { x: number; z: number },
+  stand: { x: number; z: number },
+  isWalkable: (x: number, z: number) => boolean
+): { x: number; z: number } | undefined {
+  if (isWalkable(spot.x, spot.z)) return undefined;
+  if (!isWalkable(stand.x, stand.z)) return undefined;
+  if (Math.hypot(stand.x - spot.x, stand.z - spot.z) > APPROACH_MAX_M) return undefined;
+  return { x: round(stand.x), z: round(stand.z) };
+}
+
 /** Default label height above the floor for a POI dropped where the walker stands. */
 export const LABEL_HEIGHT_M = 1.2;
 
-export const POI_CATEGORIES = ['room', 'furniture', 'exit', 'facility', 'item', 'other'] as const;
+export const POI_CATEGORIES = ['room', 'exit', 'sleep', 'study', 'storage', 'utility', 'facility', 'furniture', 'decor', 'item', 'other'] as const;
 
 export function makePoi(sceneId: Id, name: string, x: number, z: number, opts: Partial<POI> = {}): POI {
   return {
@@ -70,6 +94,10 @@ export function validatePoiSet(data: unknown): string[] {
     if (!isObj(pos) || !['x', 'y', 'z'].every(c => typeof pos[c] === 'number' && Number.isFinite(pos[c]))) {
       errs.push(`${at}.position must have numeric x, y, z`);
     }
+    const ap = p.approach;
+    if (ap !== undefined && !(isObj(ap) && ['x', 'z'].every(c => typeof ap[c] === 'number' && Number.isFinite(ap[c])))) {
+      errs.push(`${at}.approach must have numeric x, z`);
+    }
     if (p.aliases !== undefined && !(Array.isArray(p.aliases) && p.aliases.every(a => typeof a === 'string'))) {
       errs.push(`${at}.aliases must be a list of strings`);
     }
@@ -77,8 +105,20 @@ export function validatePoiSet(data: unknown): string[] {
   return errs;
 }
 
-/** Local draft of tag mode, per scene, so a page reload doesn't lose tags before export. */
+/** Same places with the same content (order included), e.g. a draft that matches the live tags */
+export function samePois(a: POI[], b: POI[]): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+/**
+ * Local draft of tag mode, per scene, so a page reload doesn't lose tags before export.
+ * It also remembers which live pois.json it was edited from (`base`, its updated_at), so tag mode
+ * can tell when the live tags moved on since and never let an old draft wipe them silently.
+ */
 export class PoiDraftStore {
+  /** updated_at of the live pois.json this draft started from; null = there was none; undefined = unknown */
+  base: string | null | undefined = undefined;
+
   constructor(private readonly _sceneId: Id) {}
 
   private get _key(): string {
@@ -96,9 +136,23 @@ export class PoiDraftStore {
     }
   }
 
+  /** Base of the stored draft (see `base`), undefined for none or for drafts saved before bases existed */
+  loadBase(): string | null | undefined {
+    try {
+      const raw = localStorage.getItem(this._key);
+      if (!raw) return undefined;
+      const b = (JSON.parse(raw) as { base_updated_at?: unknown }).base_updated_at;
+      return typeof b === 'string' || b === null ? b : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
   save(pois: POI[]): void {
     try {
-      localStorage.setItem(this._key, JSON.stringify(makePoiSet(this._sceneId, pois)));
+      const draft: PoiSet & { base_updated_at?: string | null } = makePoiSet(this._sceneId, pois);
+      if (this.base !== undefined) draft.base_updated_at = this.base;
+      localStorage.setItem(this._key, JSON.stringify(draft));
     } catch {
       // Private mode or storage full: tags still live in the page until export
     }

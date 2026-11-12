@@ -5,7 +5,8 @@
     "typeRoots": ["./node_modules/@types"],
     "paths": {
       "vitest": ["node_modules/vitest"],
-      "@sparkjsdev/spark": ["node_modules/@sparkjsdev/spark"]
+      "@sparkjsdev/spark": ["node_modules/@sparkjsdev/spark"],
+      "uqr": ["node_modules/uqr"]
     }
   },
   "include": ["src", "../tests/viewer"]

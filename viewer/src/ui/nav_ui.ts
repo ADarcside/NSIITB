@@ -18,6 +18,16 @@ export interface NavUIOptions {
   container?: HTMLElement;
 }
 
+/** Walking pace for the time shown next to a route (m/s), an unhurried indoor walk */
+export const WALK_SPEED_MPS = 1.2;
+
+/** "about 20 s" / "about 2 min" walk for a route length */
+export function walkTime(metres: number): string {
+  const s = metres / WALK_SPEED_MPS;
+  if (s < 55) return `about ${Math.max(5, Math.round(s / 5) * 5)} s`;
+  return `about ${Math.max(1, Math.round(s / 60))} min`;
+}
+
 function escapeHtml(text: string): string {
   const div = document.createElement('div');
   div.textContent = text;
@@ -35,8 +45,15 @@ export class NavUI {
   private readonly _resultsList: HTMLElement;
 
   private readonly _routeCard: HTMLElement;
+  private readonly _routeFrom: HTMLDivElement;
+  private readonly _fromBtn: HTMLButtonElement;
+  private readonly _fromList: HTMLUListElement;
+  private _fromChoices: { id: string | null; label: string }[] = [];
+  private _fromValue: string | null = null;
+  private _fromActive = 0;
   private readonly _routeContent: HTMLElement;
   private readonly _routeWalkBtn: HTMLButtonElement;
+  private readonly _routeArBtn: HTMLButtonElement;
   private readonly _routeClearBtn: HTMLButtonElement;
 
   private readonly _poiCard: HTMLElement;
@@ -48,6 +65,7 @@ export class NavUI {
   private readonly _poiCardCloseBtn: HTMLButtonElement;
   private readonly _poiCardNavBtn: HTMLButtonElement;
   private readonly _poiCardLookBtn: HTMLButtonElement;
+  private readonly _poiCardShareBtn: HTMLButtonElement;
   private _currentPoiCardItem: POI | null = null;
   private _isAutoWalking = false;
 
@@ -62,6 +80,9 @@ export class NavUI {
   private readonly _navigateCallbacks: ((poi: POI) => void)[] = [];
   private readonly _lookCallbacks: ((poi: POI) => void)[] = [];
   private readonly _toggleAutoWalkCallbacks: (() => void)[] = [];
+  private readonly _shareCallbacks: ((poi: POI) => void)[] = [];
+  private readonly _fromCallbacks: ((poiId: string | null) => void)[] = [];
+  private readonly _arCallbacks: (() => void)[] = [];
 
   constructor(options: NavUIOptions = {}) {
     const parent = options.container ?? document.body;
@@ -124,6 +145,25 @@ export class NavUI {
     this._routeCard.setAttribute('role', 'region');
     this._routeCard.setAttribute('aria-label', 'Route navigation');
 
+    // Start of the route: where you are (default) or any tagged place
+    // A styled dropdown instead of a native <select>, whose pop-up list ignores the site's colours
+    this._routeFrom = document.createElement('div');
+    this._routeFrom.className = 'nav-route-from';
+    this._fromBtn = document.createElement('button');
+    this._fromBtn.type = 'button';
+    this._fromBtn.className = 'nav-from-btn';
+    this._fromBtn.setAttribute('aria-haspopup', 'listbox');
+    this._fromBtn.setAttribute('aria-expanded', 'false');
+    this._fromBtn.setAttribute('aria-label', 'Route starts from');
+    this._fromBtn.title = 'Start the route from you or from another place';
+    this._fromList = document.createElement('ul');
+    this._fromList.className = 'nav-from-list hidden';
+    this._fromList.id = 'nav-from-list';
+    this._fromList.setAttribute('role', 'listbox');
+    this._fromList.setAttribute('aria-label', 'Route starts from');
+    this._fromBtn.setAttribute('aria-controls', this._fromList.id);
+    this._routeFrom.append(this._fromBtn, this._fromList);
+
     this._routeContent = document.createElement('div');
     this._routeContent.className = 'nav-route-content';
     this._routeContent.setAttribute('aria-live', 'polite');
@@ -133,13 +173,20 @@ export class NavUI {
     this._routeWalkBtn.title = 'Auto-walk along this path (1.4 m/s)';
     this._setWalkButton('walk', 'Take me there');
 
+    // AR guidance slot: hidden until an AR guide is registered and the device supports it
+    this._routeArBtn = document.createElement('button');
+    this._routeArBtn.className = 'nav-route-ar-btn ns-press hidden';
+    this._routeArBtn.textContent = 'AR';
+    this._routeArBtn.title = 'Follow this route through your camera';
+    this._routeArBtn.setAttribute('aria-label', 'Follow this route through your camera');
+
     this._routeClearBtn = document.createElement('button');
     this._routeClearBtn.className = 'nav-icon-btn nav-route-clear-btn ns-press';
     this._routeClearBtn.setAttribute('aria-label', 'Clear route');
     this._routeClearBtn.title = 'Clear route';
     this._routeClearBtn.innerHTML = icon('close', 16);
 
-    this._routeCard.append(this._routeContent, this._routeWalkBtn, this._routeClearBtn);
+    this._routeCard.append(this._routeFrom, this._routeContent, this._routeWalkBtn, this._routeArBtn, this._routeClearBtn);
 
     // 3. POI Info Card (bottom-left)
     this._poiCard = document.createElement('div');
@@ -188,7 +235,13 @@ export class NavUI {
     this._poiCardLookBtn.className = 'nav-poi-btn secondary ns-slant-l ns-press';
     this._poiCardLookBtn.textContent = 'Look';
 
-    actionsRow.append(this._poiCardNavBtn, this._poiCardLookBtn);
+    this._poiCardShareBtn = document.createElement('button');
+    this._poiCardShareBtn.className = 'nav-icon-btn nav-poi-share ns-press';
+    this._poiCardShareBtn.setAttribute('aria-label', 'Share a link or QR code to this place');
+    this._poiCardShareBtn.title = 'Share a link or QR code to this place';
+    this._poiCardShareBtn.innerHTML = icon('share', 16);
+
+    actionsRow.append(this._poiCardNavBtn, this._poiCardLookBtn, this._poiCardShareBtn);
 
     this._poiCard.append(
       cardHeader,
@@ -246,6 +299,93 @@ export class NavUI {
 
   onToggleAutoWalk(cb: () => void): void {
     this._toggleAutoWalkCallbacks.push(cb);
+  }
+
+  /** Shows the route card's AR button (only when an AR guide is available on this device) */
+  setArAvailable(on: boolean): void {
+    this._routeArBtn.classList.toggle('hidden', !on);
+  }
+
+  onAr(cb: () => void): void {
+    this._arCallbacks.push(cb);
+  }
+
+  /** Share button on the place card */
+  onShare(cb: (poi: POI) => void): void {
+    this._shareCallbacks.push(cb);
+  }
+
+  /** The route's start picker changed: a place id, or null for "you" */
+  onFromChange(cb: (poiId: string | null) => void): void {
+    this._fromCallbacks.push(cb);
+  }
+
+  /** Fills the start picker: you, then every place except the destination; `selectedId` null = you. */
+  setFromChoices(pois: POI[], selectedId: string | null, destinationId: string | null): void {
+    const others = pois.filter(p => p.poi_id !== destinationId).sort((a, b) => a.name.localeCompare(b.name));
+    this._fromChoices = [{ id: null, label: 'From you' }, ...others.map(p => ({ id: p.poi_id, label: `From ${p.name}` }))];
+    this._fromValue = selectedId && others.some(p => p.poi_id === selectedId) ? selectedId : null;
+    this._closeFrom(false);
+    this._fromList.textContent = '';
+    this._fromChoices.forEach((c, i) => {
+      const li = document.createElement('li');
+      li.className = 'nav-from-option';
+      li.id = `nav-from-opt-${i}`;
+      li.setAttribute('role', 'option');
+      li.textContent = c.label;
+      li.addEventListener('pointerdown', e => e.preventDefault()); // keep focus on the button
+      li.addEventListener('click', () => this._pickFrom(i));
+      li.addEventListener('pointermove', () => this._setFromActive(i));
+      this._fromList.append(li);
+    });
+    this._renderFrom();
+    this._routeFrom.classList.toggle('hidden', others.length === 0);
+  }
+
+  /** The start the picker shows: a place id, or null for "you" */
+  get fromValue(): string | null {
+    return this._fromValue;
+  }
+
+  private _renderFrom(): void {
+    const i = Math.max(0, this._fromChoices.findIndex(c => c.id === this._fromValue));
+    this._fromBtn.textContent = this._fromChoices[i]?.label ?? 'From you';
+    this._fromList.querySelectorAll('.nav-from-option').forEach((li, j) => li.setAttribute('aria-selected', String(j === i)));
+  }
+
+  private _setFromActive(i: number): void {
+    const items = this._fromList.querySelectorAll<HTMLElement>('.nav-from-option');
+    if (!items.length) return;
+    this._fromActive = (i + items.length) % items.length;
+    items.forEach((li, j) => li.classList.toggle('active', j === this._fromActive));
+    const li = items[this._fromActive];
+    this._fromBtn.setAttribute('aria-activedescendant', li.id);
+    li.scrollIntoView?.({ block: 'nearest' });
+  }
+
+  private _openFrom(): void {
+    if (!this._fromChoices.length) return;
+    this._fromList.classList.remove('hidden');
+    this._fromBtn.setAttribute('aria-expanded', 'true');
+    this._routeFrom.classList.add('open');
+    this._setFromActive(Math.max(0, this._fromChoices.findIndex(c => c.id === this._fromValue)));
+  }
+
+  private _closeFrom(blur: boolean): void {
+    this._fromList.classList.add('hidden');
+    this._fromBtn.setAttribute('aria-expanded', 'false');
+    this._fromBtn.removeAttribute('aria-activedescendant');
+    this._routeFrom.classList.remove('open');
+    if (blur) this._fromBtn.blur(); // back to walking keys
+  }
+
+  private _pickFrom(i: number): void {
+    const choice = this._fromChoices[i];
+    this._closeFrom(true);
+    if (!choice || choice.id === this._fromValue) return;
+    this._fromValue = choice.id;
+    this._renderFrom();
+    this._fromCallbacks.forEach(cb => cb(choice.id));
   }
 
   get isAutoWalking(): boolean {
@@ -311,7 +451,7 @@ export class NavUI {
     }
 
     if (metres !== null) {
-      this._routeContent.innerHTML = `To <strong>${escapeHtml(name)}</strong> <span class="nav-route-dist ns-num">${metres.toFixed(1)} m</span>${escapeHtml(suffix)}`;
+      this._routeContent.innerHTML = `To <strong>${escapeHtml(name)}</strong> <span class="nav-route-dist ns-num">${metres.toFixed(1)} m</span><span class="nav-route-time">${walkTime(metres)}</span>${escapeHtml(suffix)}`;
     } else {
       this._routeContent.innerHTML = `No walkable path to <strong>${escapeHtml(name)}</strong>`;
     }
@@ -500,6 +640,41 @@ export class NavUI {
         const poi = this._currentPoiCardItem;
         this._navigateCallbacks.forEach(cb => cb(poi));
       }
+    });
+
+    this._poiCardShareBtn.addEventListener('click', () => {
+      if (this._currentPoiCardItem) {
+        const poi = this._currentPoiCardItem;
+        this._shareCallbacks.forEach(cb => cb(poi));
+      }
+    });
+
+    this._routeArBtn.addEventListener('click', () => this._arCallbacks.forEach(cb => cb()));
+
+    this._fromBtn.addEventListener('click', () => {
+      if (this._fromList.classList.contains('hidden')) this._openFrom();
+      else this._closeFrom(false);
+    });
+    this._fromBtn.addEventListener('blur', () => this._closeFrom(false));
+    // Keys on the picker stay in the picker, so arrows and Space don't also move you
+    this._fromBtn.addEventListener('keydown', (e: KeyboardEvent) => {
+      const open = !this._fromList.classList.contains('hidden');
+      const k = e.key;
+      if (k === 'Tab') { this._closeFrom(false); return; }
+      if (!['ArrowUp', 'ArrowDown', 'Enter', ' ', 'Escape', 'Home', 'End'].includes(k)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (!open) {
+        if (k !== 'Escape') this._openFrom();
+        else this._fromBtn.blur();
+        return;
+      }
+      if (k === 'ArrowDown') this._setFromActive(this._fromActive + 1);
+      else if (k === 'ArrowUp') this._setFromActive(this._fromActive - 1);
+      else if (k === 'Home') this._setFromActive(0);
+      else if (k === 'End') this._setFromActive(this._fromChoices.length - 1);
+      else if (k === 'Escape') this._closeFrom(false);
+      else this._pickFrom(this._fromActive);
     });
 
     this._poiCardLookBtn.addEventListener('click', () => {
