@@ -8,8 +8,6 @@
  * - All IDs adhere to the format: prefix (3 chars) + 12 lowercase base32 chars.
  */
 
-export type IdPrefix = 'spc' | 'flr' | 'rom' | 'cap' | 'job' | 'ast' | 'scn' | 'poi' | 'nav';
-
 /**
  * Unique identifier: prefix + 12 lowercase base32 characters [a-z2-7] (RFC 4648)
  * Valid prefixes: spc_, flr_, rom_, cap_, job_, ast_, scn_, poi_, nav_
