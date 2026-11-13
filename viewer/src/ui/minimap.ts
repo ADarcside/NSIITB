@@ -1,12 +1,14 @@
 /**
  * Namma Space: Floor-plan Minimap (Round 2)
  *
- * Renders the 2D walking grid from grid.json (free light, blocked dark) to an offscreen canvas
- * cache once so per-frame redraw is cheap (<= 1 fps cost).
+ * Draws a dark floor plan worked out from grid.json (nav/floorplan.ts): gold walls with a door gap
+ * and a window, furniture as boxes, same-kind boxes at one size. The plan is cached to an offscreen
+ * canvas and only redrawn when the size or the tags change, so the per-frame cost stays small.
+ * ?map=grid, or a grid that gives no plan, draws the walking grid instead (free light, blocked dark).
  *
  * Displays:
  * - Dynamic walker arrow (showing camera yaw, North is up)
- * - Tagged POIs as dots with their first letter
+ * - Tagged POIs as dots with their first letter, drawn on their object's box (real spot while adjusting)
  * - Active navigation route as cyan polyline
  * - Shift-click to relocate selected POI in tag mode (?tag=1); in Adjust mode drag a dot to move it
  * - Click POI dot to open its POI info card
@@ -17,6 +19,7 @@ import type { NavGrid, POI } from '../contracts/types.js';
 import type { Pose3D } from '../types.js';
 import type { Point2 } from '../nav/astar.js';
 import { decodeBase64ToBytes } from '../collision/grid.js';
+import { buildFloorPlanWithMasks, layoutTags, type FloorPlan, type PlanLayout, type PlanMasks } from '../nav/floorplan.js';
 import { ensureTokens, THEME } from './tokens.js';
 import { isPhone, isTouchDevice } from './device.js';
 import MINIMAP_CSS from './minimap.css?raw';
@@ -107,6 +110,13 @@ export class MinimapUI {
   private readonly _isTagMode: boolean;
 
   private _cachedGridCanvas: HTMLCanvasElement | null = null;
+  /** Floor plan from the grid; null draws the walking grid (?map=grid, or no plan found) */
+  private _plan: { plan: FloorPlan; masks: PlanMasks } | null = null;
+  private readonly _forceGrid: boolean;
+  private _layout: PlanLayout | null = null;
+  private _layoutKey = '';
+  private _planCanvas: HTMLCanvasElement | null = null;
+  private _planCanvasKey = '';
   private _grid: NavGrid | null = null;
   private _mapping: MinimapMapping | null = null;
   private _size = 220;
@@ -124,6 +134,7 @@ export class MinimapUI {
 
   constructor(options: MinimapOptions = {}) {
     this._isTagMode = Boolean(options.isTagMode);
+    this._forceGrid = typeof location !== 'undefined' && new URLSearchParams(location.search).get('map') === 'grid';
     const parent = options.container ?? document.body;
 
     this._root = document.createElement('div');
@@ -190,8 +201,9 @@ export class MinimapUI {
     let closestPoi: POI | null = null;
     // 12 px click radius with a mouse, 20 px with a finger
     let minDist = isTouchDevice() ? 20 : 12;
+    const spots = this._dotPixels(this._lastPois);
     for (const poi of this._lastPois) {
-      const pt = this.worldToPixel(poi.position.x, poi.position.z);
+      const pt = spots.get(poi.poi_id)!;
       const d = Math.hypot(pt.px - px, pt.py - py);
       if (d < minDist) {
         minDist = d;
@@ -209,6 +221,199 @@ export class MinimapUI {
     this._grid = grid;
     this._updateMapping();
     this._cacheGridRender(grid);
+    this._plan = null;
+    this._layout = null;
+    this._layoutKey = '';
+    this._planCanvasKey = '';
+    if (!this._forceGrid) {
+      try {
+        this._plan = buildFloorPlanWithMasks(grid);
+      } catch (err) {
+        console.warn('[minimap] floor plan failed, drawing the walking grid', err);
+      }
+    }
+  }
+
+  /**
+   * Canvas pixel of each dot. On the plan, dots that would overlap (two tags on one small box) are
+   * pushed apart a little; real spots while adjusting are left exactly where they are.
+   */
+  private _dotPixels(pois: POI[]): Map<string, { px: number; py: number }> {
+    const out = new Map<string, { px: number; py: number }>();
+    for (const poi of pois) {
+      const at = this._dotWorld(poi);
+      out.set(poi.poi_id, this.worldToPixel(at.x, at.z));
+    }
+    if (!this._layout || (this._isTagMode && this._placeMode)) return out;
+    const pts = [...out.values()];
+    const gap = 15; // two 7 px dots plus a hairline
+    for (let iter = 0; iter < 4; iter++) {
+      for (let i = 0; i < pts.length; i++) {
+        for (let j = i + 1; j < pts.length; j++) {
+          const a = pts[i], b = pts[j];
+          let dx = b.px - a.px, dy = b.py - a.py;
+          let d = Math.hypot(dx, dy);
+          if (d >= gap) continue;
+          if (d < 1e-3) { dx = 1; dy = 0; d = 1; }
+          const push = (gap - d) / 2;
+          a.px -= (dx / d) * push; a.py -= (dy / d) * push;
+          b.px += (dx / d) * push; b.py += (dy / d) * push;
+        }
+      }
+    }
+    return out;
+  }
+
+  /** Where a POI's dot is drawn: on its box, or its real spot while tags are being adjusted */
+  private _dotWorld(poi: POI): { x: number; z: number } {
+    if (this._isTagMode && this._placeMode) return { x: poi.position.x, z: poi.position.z };
+    return this._layout?.dots.get(poi.poi_id) ?? { x: poi.position.x, z: poi.position.z };
+  }
+
+  /** Recomputes the tag layout when the tags change (added, moved, renamed) */
+  private _updateLayout(pois: POI[]): void {
+    if (!this._plan || !this._grid) return;
+    const key = pois
+      .map((p) => `${p.poi_id}|${p.name}|${p.category ?? ''}|${(p.aliases ?? []).join(',')}|${p.position.x.toFixed(3)}|${p.position.z.toFixed(3)}`)
+      .join(';');
+    if (key === this._layoutKey && this._layout) return;
+    this._layoutKey = key;
+    try {
+      this._layout = layoutTags(this._grid, this._plan.plan, this._plan.masks, pois);
+    } catch (err) {
+      console.warn('[minimap] tag layout failed', err);
+      this._layout = null;
+    }
+  }
+
+  /** Draws floor, boxes and walls (with door and window) to the cached plan canvas */
+  private _renderPlanCanvas(cssW: number, cssH: number, dpr: number): HTMLCanvasElement | null {
+    if (!this._plan || !this._mapping || typeof document === 'undefined') return null;
+    const key = `${cssW}x${cssH}@${dpr}|${this._layoutKey}`;
+    if (this._planCanvas && key === this._planCanvasKey) return this._planCanvas;
+    const canvas = this._planCanvas ?? document.createElement('canvas');
+    canvas.width = Math.round(cssW * dpr);
+    canvas.height = Math.round(cssH * dpr);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    const m = this._mapping;
+    const P = (x: number, z: number) => worldToPixel(x, z, m);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, cssW, cssH);
+    const { plan } = this._plan;
+    const boxes = this._layout?.boxes ?? plan.boxes;
+    const openings = this._layout?.openings ?? [];
+
+    // Floor (rings after the first are solid islands, cut out by the even-odd rule)
+    ctx.beginPath();
+    for (const ring of plan.outline) {
+      ring.forEach((p, i) => {
+        const q = P(p.x, p.z);
+        if (i === 0) ctx.moveTo(q.px, q.py);
+        else ctx.lineTo(q.px, q.py);
+      });
+      ctx.closePath();
+    }
+    ctx.fillStyle = THEME.planFloor;
+    ctx.fill('evenodd');
+
+    // Furniture boxes
+    for (const b of boxes) {
+      const a = P(b.minX, b.minZ);
+      const c = P(b.maxX, b.maxZ);
+      const x = a.px + 0.5, y = a.py + 0.5;
+      const bw = Math.max(1, c.px - a.px - 1), bh = Math.max(1, c.py - a.py - 1);
+      ctx.beginPath();
+      if (typeof ctx.roundRect === 'function') ctx.roundRect(x, y, bw, bh, Math.min(3, bw / 2, bh / 2));
+      else ctx.rect(x, y, bw, bh);
+      ctx.fillStyle = THEME.planBox;
+      ctx.fill();
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = b.tall ? THEME.planBoxLineTall : THEME.planBoxLine;
+      ctx.stroke();
+    }
+
+    // Walls, leaving a gap where a door is
+    const wallW = isPhone() ? 2 : 3;
+    const doors = openings.filter((o) => o.kind === 'door');
+    ctx.strokeStyle = THEME.gold;
+    ctx.lineWidth = wallW;
+    ctx.lineCap = 'square';
+    ctx.lineJoin = 'miter';
+    ctx.beginPath();
+    for (const ring of plan.outline) {
+      for (let i = 0; i < ring.length; i++) {
+        const a = ring[i];
+        const b = ring[(i + 1) % ring.length];
+        const len = Math.hypot(b.x - a.x, b.z - a.z);
+        if (len < 1e-9) continue;
+        const ux = (b.x - a.x) / len, uz = (b.z - a.z) / len;
+        // Door intervals lying on this wall segment, as distances from a
+        const gaps: [number, number][] = [];
+        for (const d of doors) {
+          const off = (q: { x: number; z: number }) => Math.abs((q.x - a.x) * uz - (q.z - a.z) * ux);
+          if (off(d.a) > 1e-6 || off(d.b) > 1e-6) continue;
+          const s0 = (d.a.x - a.x) * ux + (d.a.z - a.z) * uz;
+          const s1 = (d.b.x - a.x) * ux + (d.b.z - a.z) * uz;
+          const lo = Math.min(s0, s1), hi = Math.max(s0, s1);
+          if (hi > 0 && lo < len) gaps.push([Math.max(0, lo), Math.min(len, hi)]);
+        }
+        gaps.sort((p, q) => p[0] - q[0]);
+        let s = 0;
+        const piece = (from: number, to: number) => {
+          if (to - from < 1e-6) return;
+          const p0 = P(a.x + ux * from, a.z + uz * from);
+          const p1 = P(a.x + ux * to, a.z + uz * to);
+          ctx.moveTo(p0.px, p0.py);
+          ctx.lineTo(p1.px, p1.py);
+        };
+        for (const [lo, hi] of gaps) {
+          piece(s, lo);
+          s = Math.max(s, hi);
+        }
+        piece(s, len);
+      }
+    }
+    ctx.stroke();
+
+    // Door: a leaf line and a thin dashed swing arc into the room. Window: a sky segment on the wall
+    for (const o of openings) {
+      const pa = P(o.a.x, o.a.z);
+      const pb = P(o.b.x, o.b.z);
+      if (o.kind === 'window') {
+        ctx.strokeStyle = THEME.sky;
+        ctx.lineWidth = wallW + 1;
+        ctx.lineCap = 'butt';
+        ctx.beginPath();
+        ctx.moveTo(pa.px, pa.py);
+        ctx.lineTo(pb.px, pb.py);
+        ctx.stroke();
+        continue;
+      }
+      const r = Math.hypot(pb.px - pa.px, pb.py - pa.py);
+      const start = Math.atan2(pb.py - pa.py, pb.px - pa.px);
+      const leaf = Math.atan2(o.inward.z, o.inward.x);
+      // Sweep the short way from the closed door (along the wall) to the open leaf
+      let delta = leaf - start;
+      while (delta > Math.PI) delta -= 2 * Math.PI;
+      while (delta < -Math.PI) delta += 2 * Math.PI;
+      ctx.strokeStyle = THEME.planDoorSwing;
+      ctx.lineWidth = 1;
+      ctx.lineCap = 'butt';
+      ctx.beginPath();
+      ctx.moveTo(pa.px, pa.py);
+      ctx.lineTo(pa.px + Math.cos(leaf) * r, pa.py + Math.sin(leaf) * r);
+      ctx.stroke();
+      ctx.setLineDash([2, 2]);
+      ctx.beginPath();
+      ctx.arc(pa.px, pa.py, r, start, start + delta, delta < 0);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    this._planCanvas = canvas;
+    this._planCanvasKey = key;
+    return canvas;
   }
 
   worldToPixel(x: number, z: number): { px: number; py: number } {
@@ -253,16 +458,22 @@ export class MinimapUI {
 
     const m = this._mapping;
 
-    // 1. Draw cached floor-plan grid (free light, blocked dark)
-    if (this._cachedGridCanvas) {
-      ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(this._cachedGridCanvas, m.offsetX, m.offsetY, m.drawW, m.drawH);
+    // 1. Draw the cached floor plan, or the walking grid (free light, blocked dark) without one
+    this._updateLayout(pois);
+    const planCanvas = this._renderPlanCanvas(cssSize, cssH, dpr);
+    if (planCanvas) {
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(planCanvas, 0, 0, cssSize, cssH);
+    } else {
+      if (this._cachedGridCanvas) {
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(this._cachedGridCanvas, m.offsetX, m.offsetY, m.drawW, m.drawH);
+      }
+      // Grid outer border
+      ctx.strokeStyle = THEME.mapBorder;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(m.offsetX, m.offsetY, m.drawW, m.drawH);
     }
-
-    // Grid outer border
-    ctx.strokeStyle = THEME.mapBorder;
-    ctx.lineWidth = 1;
-    ctx.strokeRect(m.offsetX, m.offsetY, m.drawW, m.drawH);
 
     // 2. Draw route polyline (gold over a thin dark underlay, so it reads on the light floor)
     if (route && route.length >= 2) {
@@ -287,8 +498,9 @@ export class MinimapUI {
     }
 
     // 3. Draw POIs as dots with their first letter
+    const spots = this._dotPixels(pois);
     for (const poi of pois) {
-      const pt = worldToPixel(poi.position.x, poi.position.z, m);
+      const pt = spots.get(poi.poi_id)!;
       const isSelected = poi.poi_id === selectedPoiId;
       const radius = isSelected ? 8 : 7;
 

@@ -35,6 +35,12 @@ export const THEME = {
   mapBlocked: [10, 10, 12, 255] as const,
   mapBorder: 'rgba(150, 200, 255, 0.15)',
   mapDot: '#14182a',
+  // Floor plan minimap (dark): floor inside the walls, furniture boxes and their outlines
+  planFloor: '#1b2233',
+  planBox: '#2c3550',
+  planBoxLine: '#7d8bb0',
+  planBoxLineTall: '#a9b6d8',
+  planDoorSwing: 'rgba(255, 215, 0, 0.55)',
   routeTexture: ['rgba(255, 255, 255, 0.95)', 'rgba(255, 215, 0, 0.92)', 'rgba(255, 170, 0, 0.6)', 'rgba(181, 59, 38, 0.25)'] as const,
 } as const;
 
