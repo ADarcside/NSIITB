@@ -7,7 +7,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { buildFloorPlanWithMasks } from '../../viewer/src/nav/floorplan.js';
-import { movableObjects } from '../../viewer/src/layout/objects.js';
+import { movableObjects, boxMinus } from '../../viewer/src/layout/objects.js';
 import { patchGrid, unpackBits, packBits, PATCH_M, backToOriginal, type Move } from '../../viewer/src/layout/regrid.js';
 import type { NavGrid } from '../../viewer/src/contracts/types.js';
 
@@ -19,6 +19,73 @@ const objects = movableObjects(grid, built.plan, built.masks);
 const n = grid.width * grid.height;
 
 describe('movable objects on K-720', () => {
+  // Table 6 (tag at 2.21, -0.69): its top runs under the end of Bunk 2, and a shelf hangs on the wall above it
+  const table6 = () => objects.find(o => o.box.minX <= 2.21 && o.box.maxX >= 2.21 && o.box.minZ <= -1 && o.box.maxZ >= -1)!;
+
+  it('Table 6 leaves the wall shelf above it behind', () => {
+    const t = table6();
+    expect(t.y1).toBeGreaterThan(0.8);
+    expect(t.y1).toBeLessThan(1.4);
+  });
+
+  it("Table 6 takes the end of its top that runs into Bunk 2's box, and Bunk 2 leaves it", () => {
+    const t = table6();
+    expect(t.extra.length).toBe(1);
+    const p = t.extra[0];
+    expect(p.maxX).toBeCloseTo(t.box.minX, 5);
+    expect(t.box.minX - p.minX).toBeGreaterThanOrEqual(0.1);
+    expect(p.y0).toBeGreaterThan(0.5);
+    expect(p.y1).toBeLessThan(1.1);
+    const bunk = objects.find(o => o.cut.includes(p))!;
+    expect(bunk.box.maxX).toBeCloseTo(t.box.minX, 5);
+    // The bunk's lift without the piece covers the same volume minus the piece
+    const vol = (b: { minX: number; maxX: number; minZ: number; maxZ: number; y0: number; y1: number }) =>
+      (b.maxX - b.minX) * (b.maxZ - b.minZ) * (b.y1 - b.y0);
+    const whole = { ...bunk.reach, y0: bunk.y0, y1: bunk.y1 };
+    const parts = boxMinus(whole, bunk.cut);
+    expect(parts.reduce((a, q) => a + vol(q), 0)).toBeCloseTo(vol(whole) - bunk.cut.reduce((a, q) => a + vol(q), 0), 6);
+  });
+
+  it('every table takes the end of its top under a bunk, and nothing reaches the ceiling', () => {
+    const tagAt = (x: number, z: number) => objects.find(o => x >= o.box.minX && x <= o.box.maxX && z >= o.box.minZ && z <= o.box.maxZ);
+    // Table 1 and Table 2 both run under Bunk 1's ends
+    for (const [x, z] of [[-2.0, -1.5], [0.08, -1.5]]) {
+      const t = tagAt(x, z)!;
+      expect(t.extra.some(p => p.y0 > 0.5 && p.y1 < 1.1)).toBe(true);
+      expect(t.y1).toBeLessThan(1.2); // the wall rack and bookshelf above stay
+    }
+    // Bunks end under 2 m (nothing on the wall or near the ceiling goes with them)
+    for (const id of [0, 1, 5]) expect(objects.find(o => o.id === id)!.y1).toBeLessThan(2.1);
+  });
+
+  it('floor-to-ceiling built-ins (cupboards, door frame) are not movable unless the owner fixes their box', () => {
+    for (const [x, z] of [[-2.5, -1.1], [-2.5, 1.1], [-2.6, -0.6]]) {
+      expect(objects.some(o => x >= o.box.minX && x <= o.box.maxX && z >= o.box.minZ && z <= o.box.maxZ)).toBe(false);
+    }
+    const cup = built.plan.boxes.find(b => -2.5 >= b.minX && -2.5 <= b.maxX && -1.1 >= b.minZ && -1.1 <= b.maxZ)!;
+    expect(movableObjects(grid, built.plan, built.masks, new Set([cup.id])).some(o => o.id === cup.id)).toBe(true);
+  });
+
+  it('a chair seat pushed under a table goes with the chair, not the table', () => {
+    const chair = objects.find(o => o.box.minX <= -1.6 && o.box.maxX >= -1.6 && o.box.minZ <= -1.0 && o.box.maxZ >= -1.0)!;
+    const table1 = objects.find(o => o.box.minX <= -2.0 && o.box.maxX >= -2.0 && o.box.minZ <= -1.5 && o.box.maxZ >= -1.5)!;
+    expect(chair.extra.some(p => p.y1 <= 0.7 && table1.cut.includes(p))).toBe(true);
+    expect(table1.extra.every(p => !chair.cut.includes(p))).toBe(true);
+  });
+
+  it('box minus a piece gives boxes that do not overlap and leave the piece out', () => {
+    const box = { minX: 0, maxX: 1, minZ: 0, maxZ: 1, y0: 0, y1: 2 };
+    const cut = { minX: 0.8, maxX: 1.2, minZ: 0.2, maxZ: 0.6, y0: 0.6, y1: 0.9 };
+    const parts = boxMinus(box, [cut]);
+    const inside = (b: typeof box, x: number, z: number, y: number) => x >= b.minX && x < b.maxX && z >= b.minZ && z < b.maxZ && y >= b.y0 && y < b.y1;
+    for (let i = 0; i < 2000; i++) {
+      const x = Math.random(), z = Math.random(), y = Math.random() * 2;
+      const k = parts.filter(p => inside(p, x, z, y)).length;
+      expect(k).toBe(inside(cut, x, z, y) ? 0 : 1);
+    }
+    expect(boxMinus(box, [{ ...cut, minX: 2, maxX: 3 }])).toEqual([box]);
+  });
+
   it('finds movable boxes, none tall, each with a height range', () => {
     expect(objects.length).toBeGreaterThan(0);
     for (const o of objects) {

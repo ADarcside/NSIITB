@@ -11,7 +11,7 @@
 
 import * as THREE from 'three';
 import { PackedSplats, setPackedSplat, SplatEdit, SplatEditSdf, SplatEditSdfType, SplatEditRgbaBlendMode, SplatMesh } from '@sparkjsdev/spark';
-import type { MovableObject } from './objects.js';
+import { boxMinus, type MovableObject } from './objects.js';
 import { selectSplats, buildCopy, fitWalls, type FloorBox, type PackedSource, type WallFront } from './lift.js';
 import type { Move } from './regrid.js';
 import type { NavGrid } from '../contracts/types.js';
@@ -181,7 +181,19 @@ export class LiftedFurniture {
       unfitted.forEach((o, k) => this._fit.set(o.id, fits[k]));
     }
     const reach = chosen.map(o => this._fit.get(o.id)!.reach);
-    const sel = selectSplats(src, this._worldFromSplat, chosen.map((o, b) => ({ ...reach[b], y0: o.y0, y1: o.y1 })));
+    // Each object's boxes: its own reach without the pieces that belong to a neighbour, plus the
+    // pieces of it that run into a neighbour's box (a table top under a bunk's end)
+    const parts = chosen.map((o, b) => [...boxMinus({ ...reach[b], y0: o.y0, y1: o.y1 }, o.cut), ...o.extra]);
+    const flat = parts.flat();
+    const owner = parts.flatMap((p, b) => p.map(() => b));
+    const flatSel = selectSplats(src, this._worldFromSplat, flat);
+    const copied = chosen.map((_, b) => {
+      const lists = flatSel.copied.filter((_, k) => owner[k] === b);
+      const out = new Uint32Array(lists.reduce((t, l) => t + l.length, 0));
+      let at = 0;
+      for (const l of lists) { out.set(l, at); at += l.length; }
+      return out.sort();
+    });
     const edit = new SplatEdit({ rgbaBlendMode: SplatEditRgbaBlendMode.MULTIPLY, softEdge: 0, sdfSmooth: 0 });
     const sdfs: SplatEditSdf[] = [];
     mesh.updateMatrixWorld();
@@ -211,15 +223,16 @@ export class LiftedFurniture {
       }
     }
     chosen.forEach((o, b) => {
-      const sdf = new SplatEditSdf({ type: SplatEditSdfType.BOX, opacity: 0, color: new THREE.Color(1, 1, 1) });
-      const R = reach[b];
       const y0 = fills[b] ? FILL_TUNING.hideLo : o.y0;
-      sdf.position.set((R.minX + R.maxX) / 2, (y0 + o.y1) / 2, (R.minZ + R.maxZ) / 2);
-      sdf.scale.set((R.maxX - R.minX) / 2, (o.y1 - y0) / 2, (R.maxZ - R.minZ) / 2);
-      sdf.updateMatrixWorld();
-      sdfs.push(sdf);
+      for (const R of [...boxMinus({ ...reach[b], y0, y1: o.y1 }, o.cut), ...o.extra]) {
+        const sdf = new SplatEditSdf({ type: SplatEditSdfType.BOX, opacity: 0, color: new THREE.Color(1, 1, 1) });
+        sdf.position.set((R.minX + R.maxX) / 2, (R.y0 + R.y1) / 2, (R.minZ + R.maxZ) / 2);
+        sdf.scale.set((R.maxX - R.minX) / 2, (R.y1 - R.y0) / 2, (R.maxZ - R.minZ) / 2);
+        sdf.updateMatrixWorld();
+        sdfs.push(sdf);
+      }
 
-      const data = buildCopy(src, sel.copied[b], true);
+      const data = buildCopy(src, copied[b], true);
       const copy = new SplatMesh({
         packedSplats: new PackedSplats({
           packedArray: data.packedArray,
