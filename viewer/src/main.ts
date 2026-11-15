@@ -217,7 +217,7 @@ async function bootstrap() {
 
     let planner: NavPlanner | null = null;
     let loadedGrid: NavGrid | null = null;
-    // Rearrange (move furniture, visitor mode behind ?rearrange=1): loaded on demand once the grid is in
+    // Rearrange (move furniture, a private mode for every visitor): loaded on demand once the grid is in
     let rearrange: { update: () => void; refreshPois: () => void; setPaused: (on: boolean) => void } | null = null;
     /** True while the Rearrange panel is open (the 3D view then drags furniture instead of grabbing the mouse) */
     let rearrangeOpen = (): boolean => false;
@@ -412,7 +412,7 @@ async function bootstrap() {
 
     /**
      * Rearrange: the layout in use is applied to the grid, the tags, the minimap and the scene.
-     * Everyone gets the published layout; ?rearrange=1 adds the private Rearrange panel, and tag
+     * Everyone gets the published layout and the private Rearrange mode (?rearrange=0 hides it), and tag
      * mode the admin one that saves the layout for everyone.
      */
     const startRearrange = async (gridData: NavGrid, gridHash: string) => {
@@ -423,7 +423,7 @@ async function bootstrap() {
         if (parsed.warning && !text.trimStart().startsWith('<')) console.warn('[Viewer]', parsed.warning);
         published = parsed.layout;
       }
-      const mode = isTagMode ? 'admin' : searchParams.get('rearrange') === '1' ? 'visitor' : 'view';
+      const mode = isTagMode ? 'admin' : searchParams.get('rearrange') === '0' ? 'view' : 'visitor';
       if (mode === 'view' && !published?.moves.length) return;
       try {
         const [{ RearrangeController }, { RearrangeUI }, { movedCorners }] = await Promise.all([
