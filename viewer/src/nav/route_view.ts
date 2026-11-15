@@ -103,6 +103,12 @@ function createPathTexture(): THREE.CanvasTexture {
   return texture;
 }
 
+/** UI that labels must not sit under (hidden elements measure 0 x 0 and are skipped) */
+const UI_SELECTOR = [
+  '.hud-top-right', '.nav-search-container', '.namma-minimap-container', '.nav-route-card', '.nav-poi-card',
+  '.tag-panel', '.tc-stick', '.tc-btn', '.mp-panel', '.rr-panel',
+].join(', ');
+
 export class RouteView {
   private readonly _scene: THREE.Scene;
   private readonly _texture: THREE.CanvasTexture;
@@ -117,6 +123,8 @@ export class RouteView {
   private _labelsHidden = false;
   private readonly _labelElements = new Map<string, HTMLElement>();
   private readonly _labelSizes = new Map<HTMLElement, { w: number; h: number }>();
+  private _uiRectsAt = -Infinity;
+  private _uiRectsCache: { l: number; t: number; r: number; b: number }[] = [];
   private readonly _pickCallbacks: ((poi: POI) => void)[] = [];
   private readonly _pillDownCallbacks: ((poi: POI, e: PointerEvent) => boolean)[] = [];
   private _suppressClick = false;
@@ -457,7 +465,9 @@ export class RouteView {
     }
     shown.sort((a, b) => Number(b.highlight) - Number(a.highlight) || a.distance - b.distance);
 
-    const placed: { l: number; t: number; r: number; b: number }[] = [];
+    // Panels, buttons and the minimap count as taken space too, so a label never sits under them
+    const ui = this._uiRects();
+    const placed: { l: number; t: number; r: number; b: number }[] = ui.slice();
     for (const s of shown) {
       const { el } = s;
       if (el.style.display === 'none') el.style.display = 'block';
@@ -467,7 +477,9 @@ export class RouteView {
         this._labelSizes.set(el, size);
       }
       const box = { l: s.x - size.w / 2 - 4, t: s.y - size.h / 2 - 3, r: s.x + size.w / 2 + 4, b: s.y + size.h / 2 + 3 };
-      if (!s.highlight && placed.some(p => box.l < p.r && box.r > p.l && box.t < p.b && box.b > p.t)) {
+      // The destination wins over other labels, but not over a panel: under a card it is only clutter
+      const underUi = s.highlight && ui.some(p => s.x > p.l && s.x < p.r && s.y > p.t && s.y < p.b);
+      if (underUi || (!s.highlight && placed.some(p => box.l < p.r && box.r > p.l && box.t < p.b && box.b > p.t))) {
         el.style.display = 'none';
         continue;
       }
@@ -482,6 +494,21 @@ export class RouteView {
         el.style.opacity = fade.toFixed(2);
       }
     }
+  }
+
+  /** Screen boxes of the on-screen UI (re-measured at most 4 times a second) */
+  private _uiRects(): { l: number; t: number; r: number; b: number }[] {
+    const now = performance.now();
+    if (now - this._uiRectsAt < 250) return this._uiRectsCache.slice();
+    this._uiRectsAt = now;
+    const out: { l: number; t: number; r: number; b: number }[] = [];
+    for (const el of document.querySelectorAll<HTMLElement>(UI_SELECTOR)) {
+      const r = el.getBoundingClientRect();
+      if (r.width < 1 || r.height < 1) continue;
+      out.push({ l: r.left, t: r.top, r: r.right, b: r.bottom });
+    }
+    this._uiRectsCache = out;
+    return out.slice();
   }
 
   dispose(): void {

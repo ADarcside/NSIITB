@@ -500,3 +500,8 @@ kbd {
   font-size: var(--ns-fs-xs);
   color: var(--ns-text);
 }
+
+/* Wide screens where the HUD row would reach the search bar (see AppUI._fitHudRow) */
+.hud-top-right.hud-tight .hud-label { display: none; }
+.hud-top-right.hud-tight .hud-button { padding: 0 8px; }
+.hud-top-right.hud-tighter .ns-kbd, .hud-top-right.hud-tighter .hud-chip-k { display: none; }

@@ -32,6 +32,8 @@ export interface TouchControlsOptions {
 }
 
 const STICK_RADIUS = 52;
+/** Portrait: the pads hide while the bottom panels take more than this share of the height */
+const TUCK_SHARE = 0.34;
 /** Pulling the thumb this far past the centre (in radii) runs */
 const RUN_PULL = 1.45;
 /** Swipe across the whole screen width turns this many radians */
@@ -106,6 +108,27 @@ export class TouchControls {
     this._bindStick();
     this._bindLook(options.lookTarget);
     this.setMode(options.initialMode);
+    this._watchRoom();
+  }
+
+  /**
+   * The pads step aside (fade out) while the bottom panels take a big part of a portrait screen
+   * (a place card over an open Places sheet), so they never float high up over the room. They come
+   * back as soon as the panels shrink. The Rearrange panel hides them by its own class.
+   */
+  private _watchRoom(): void {
+    const root = document.documentElement;
+    const px = (name: string) => parseFloat(root.style.getPropertyValue(name)) || 0;
+    const check = () => {
+      const portrait = window.innerHeight > window.innerWidth;
+      const taken = px('--ns-sheet-h') + px('--ns-nav-stack-h');
+      this._root.classList.toggle('tc-tucked', portrait && taken > window.innerHeight * TUCK_SHARE);
+    };
+    const obs = new MutationObserver(check);
+    obs.observe(root, { attributes: true, attributeFilter: ['style'] });
+    window.addEventListener('resize', check);
+    this._cleanup.push(() => { obs.disconnect(); window.removeEventListener('resize', check); });
+    check();
   }
 
   /** Free roam shows Up / Down, Walk shows Jump */
@@ -248,12 +271,13 @@ function injectStyles(): void {
       pointer-events: none;
       transition: bottom var(--ns-dur) var(--ns-ease-out);
     }
-    html.ns-search-open .touch-controls, html.ns-help-open .touch-controls { display: none; }
+    html.ns-search-open .touch-controls, html.ns-help-open .touch-controls, html.ns-rr-open .touch-controls { display: none; }
+    .touch-controls.tc-tucked { opacity: 0; visibility: hidden; transition: opacity var(--ns-dur-fast) ease, visibility 0s linear var(--ns-dur-fast); }
     .tc-stick {
       position: relative;
       flex: none;
-      width: ${STICK_RADIUS * 2 + 20}px;
-      height: ${STICK_RADIUS * 2 + 20}px;
+      width: ${STICK_RADIUS * 2}px;
+      height: ${STICK_RADIUS * 2}px;
       border-radius: 50%;
       background: rgba(10, 10, 12, 0.38);
       border: 1.5px solid rgba(255, 255, 255, 0.28);
@@ -270,8 +294,8 @@ function injectStyles(): void {
       position: absolute;
       left: 50%;
       top: 50%;
-      width: 50px;
-      height: 50px;
+      width: 44px;
+      height: 44px;
       border-radius: 50%;
       transform: translate(-50%, -50%);
       background: rgba(255, 255, 255, 0.86);
@@ -294,8 +318,8 @@ function injectStyles(): void {
     .tc-buttons { display: flex; flex-direction: column; gap: 10px; }
     .tc-buttons.hidden, .tc-jump.hidden { display: none; }
     .tc-btn {
-      width: 54px;
-      height: 54px;
+      width: 46px;
+      height: 46px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -314,10 +338,11 @@ function injectStyles(): void {
     /* Short landscape phones: smaller pads so the view stays open */
     @media (pointer: coarse) and (max-height: 520px) {
       .touch-controls { bottom: calc(var(--ns-hud-bottom) + 4px); }
-      .tc-stick { width: ${STICK_RADIUS * 2}px; height: ${STICK_RADIUS * 2}px; }
-      .tc-btn { width: 46px; height: 46px; }
       /* Up / Down side by side, so they stay under the minimap */
       .tc-buttons { flex-direction: row; }
+      /* Tag mode: the Places column takes the right edge, so the pads sit just left of it */
+      html:has(.tag-panel) .touch-controls { right: calc(var(--ns-hud-right) + var(--ns-tag-w) + 8px); }
+      html:has(.tag-panel) { --ns-pads-w: 110px; }
     }
   `;
   document.head.appendChild(style);

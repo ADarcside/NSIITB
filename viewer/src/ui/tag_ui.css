@@ -44,7 +44,8 @@
   top: calc(var(--ns-hud-top) + var(--ns-target) + 16px);
   right: var(--ns-hud-right);
   width: 300px;
-  /* Stops above the 360 px tag-mode minimap (plus its padding) in the bottom-right corner */
+  /* Stops above the 360 px tag-mode minimap (plus its padding) in the bottom-right corner;
+     with the map closed it may use the whole height (rule below) */
   max-height: max(180px, calc(100vh - var(--ns-hud-top) - var(--ns-target) - 16px - var(--ns-hud-bottom) - 382px));
   background: var(--ns-surface-strong);
   border: 1px solid var(--ns-border);
@@ -58,6 +59,14 @@
 }
 .tag-panel.collapsed .tag-panel-body {
   display: none;
+}
+/* Wide screens with the minimap closed: nothing to stop above */
+@media (min-width: 901px) {
+  html:has(.namma-minimap-container.hidden) .tag-panel {
+    max-height: calc(100vh - var(--ns-hud-top) - var(--ns-target) - 16px - var(--ns-hud-bottom));
+  }
+  /* Room for about three places between Adjust mode and the save buttons */
+  html:has(.namma-minimap-container.hidden) .tag-poi-list { min-height: min(170px, 30vh); }
 }
 .tag-panel-header {
   display: flex;
@@ -358,4 +367,20 @@
     top: auto;
     bottom: calc(var(--ns-hud-bottom) + var(--ns-sheet-h, 0px));
   }
+}
+
+/* Landscape phones (a short strip, especially in Safari): the Places panel is a column on the
+   right. Folded it is one line at the bottom; open it runs up to just under the top row, and the
+   cards, the minimap and the Up / Down pads keep to its left (see nav_ui.css, minimap.css). */
+@media (pointer: coarse) and (max-height: 520px) {
+  :root { --ns-tag-w: min(260px, 32vw); }
+  .tag-panel {
+    top: auto;
+    left: auto;
+    right: var(--ns-hud-right);
+    bottom: var(--ns-hud-bottom);
+    width: var(--ns-tag-w);
+    max-height: calc(100dvh - var(--ns-hud-top) - var(--ns-target) - 16px - var(--ns-hud-bottom));
+  }
+  .tag-panel-footer .ns-btn { min-height: 36px; }
 }

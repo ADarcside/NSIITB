@@ -154,6 +154,7 @@ export class RearrangeUI {
     }
     this._open = true;
     this._layer.classList.remove('hidden');
+    document.documentElement.classList.add('ns-rr-open');
     if (document.pointerLockElement) document.exitPointerLock();
     this._opts.onOpenChange?.(true);
     this._sync();
@@ -170,6 +171,7 @@ export class RearrangeUI {
     if (this._drag) { this._drag = null; this._rr.cancelDrag(); }
     this._open = false;
     this._layer.classList.add('hidden');
+    document.documentElement.classList.remove('ns-rr-open');
     cancelAnimationFrame(this._raf);
     this._opts.onOpenChange?.(false);
   }

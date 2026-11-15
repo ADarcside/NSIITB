@@ -50,3 +50,7 @@
     transform-origin: top right;
   }
 }
+@media (pointer: coarse) and (max-height: 520px) {
+  /* Tag mode: left of the Places column */
+  html:has(.tag-panel:not(.collapsed)) .namma-minimap-container { right: calc(var(--ns-hud-right) + var(--ns-tag-w) + 8px); }
+}

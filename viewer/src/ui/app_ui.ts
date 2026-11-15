@@ -362,6 +362,7 @@ export class VanillaAppUI implements AppUI {
 
     topHud.appendChild(actionGroup);
     this._root.appendChild(topHud);
+    this._fitHudRow(topHud);
     this._extraActions = { parent: useMenu ? menuList : actionGroup, make: makeAction, inMenu: useMenu };
 
     // 3. Loading screen (real download progress, room name, one rotating tip)
@@ -502,6 +503,37 @@ export class VanillaAppUI implements AppUI {
 
   /** Hides the "Play with friends" button while the multiplayer lobby or a room is open */
   /**
+   * Wide screens: the HUD row grows from the right; when it would run into the search bar on the
+   * left, it drops its text labels first, then the key hints, so the two never overlap (a laptop at
+   * 150 % scaling is only about 1280 px wide). Phones have their own layouts and are left alone.
+   */
+  private _fitHudRow(row: HTMLElement): void {
+    const fit = () => {
+      row.classList.remove('hud-tight', 'hud-tighter');
+      if (window.innerWidth <= 760 || window.matchMedia('(pointer: coarse) and (max-height: 520px)').matches) return;
+      const search = document.querySelector('.nav-search-container');
+      const limit = (search?.getBoundingClientRect().right ?? 0) + 8;
+      if (row.getBoundingClientRect().left >= limit) return;
+      row.classList.add('hud-tight');
+      if (row.getBoundingClientRect().left >= limit) return;
+      row.classList.add('hud-tighter');
+    };
+    this._fitHud = fit;
+    window.addEventListener('resize', fit);
+    // The search bar is built later (NavUI) and fonts change widths: fit again once both are in
+    let tries = 0;
+    const wait = () => {
+      fit();
+      if (!document.querySelector('.nav-search-container') && ++tries < 300) requestAnimationFrame(wait);
+    };
+    requestAnimationFrame(wait);
+    void document.fonts?.ready.then(fit);
+    if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => fit()).observe(row);
+  }
+
+  private _fitHud: () => void = () => {};
+
+  /**
    * Adds an action button (in the More menu on the Round 2 page, else in the action row), for
    * features that load on demand. Returns the button, or null before the HUD exists.
    */
@@ -518,6 +550,7 @@ export class VanillaAppUI implements AppUI {
       btn.blur();
       onClick();
     });
+    this._fitHud();
     return btn;
   }
 

@@ -115,12 +115,27 @@
     grid-column: 2;
     grid-row: 2 / 4;
     display: grid;
-    grid-template-columns: repeat(2, 44px);
-    grid-auto-rows: 44px;
+    grid-template-columns: repeat(3, 40px);
+    grid-auto-rows: 40px;
     gap: 6px;
     align-content: start;
   }
-  .rr-tools .ns-btn { padding: 0; justify-content: center; }
+  .rr-tools .ns-btn { padding: 0; justify-content: center; min-height: 40px; min-width: 40px; }
   .rr-tools .ns-btn span { display: none; }
   .rr-tools .rr-done { margin-left: 0; }
+}
+/* Wide screens: a compact panel docked top-left under the search bar, so the room stays in view
+   while you move things (the Places panel, in tag mode, is on the right) */
+@media (min-width: 901px) and (min-height: 521px) {
+  .rr-layer {
+    align-items: flex-start;
+    justify-content: flex-start;
+    padding: calc(var(--ns-hud-top) + var(--ns-target) + 16px) var(--ns-hud-left) var(--ns-hud-bottom);
+  }
+  .rr-panel {
+    width: 420px;
+    max-height: calc(100dvh - var(--ns-hud-top) - var(--ns-target) - 16px - var(--ns-hud-bottom));
+    overflow-y: auto;
+  }
+  .rr-tools .ns-btn { min-height: 34px; padding: 0 var(--ns-space-2); font-size: var(--ns-fs-xs); gap: 4px; }
 }

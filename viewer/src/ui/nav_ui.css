@@ -491,8 +491,18 @@
     display: flex;
     flex-direction: column;
     gap: var(--ns-space-2);
-    width: min(340px, calc(100% - 2 * (var(--ns-hud-left) + 120px)));
+    width: min(460px, calc(100% - 2 * (var(--ns-hud-left) + 120px)));
     pointer-events: none;
+  }
+  /* One-row route card: the start picker is a compact chip */
+  .nav-route-from { max-width: 120px; }
+  /* Tag mode: the Places panel is a column on the right, so the cards sit between it and the joystick */
+  html:has(.tag-panel) .nav-bottom-stack {
+    left: calc(var(--ns-hud-left) + 120px);
+    right: calc(var(--ns-hud-right) + var(--ns-tag-w) + 8px + var(--ns-pads-w, 0px));
+    width: auto;
+    max-width: 460px;
+    transform: none;
   }
   .nav-route-card, .nav-poi-card {
     position: relative; /* relative (not static) so the place card's grab handle can sit on it */
@@ -504,8 +514,9 @@
   .nav-poi-card { padding: var(--ns-space-2) var(--ns-space-2) var(--ns-space-2) var(--ns-space-3); gap: 6px; }
 }
 
-/* Phones: the route's start picker gets its own row, so the destination and distance stay readable */
-@media (max-width: 760px), (pointer: coarse) and (max-width: 900px) {
+/* Portrait phones: the route's start picker gets its own row, so the destination and distance stay
+   readable. Landscape keeps one row: height is what is short there */
+@media (max-width: 760px), (pointer: coarse) and (max-width: 900px) and (min-height: 521px) {
   .nav-route-card { flex-wrap: wrap; row-gap: 6px; padding-top: 6px; }
   .nav-route-from { flex: 0 0 calc(100% + 10px); max-width: none; margin-left: -10px; margin-right: 0; }
   .nav-from-btn { min-height: 40px; font-size: var(--ns-fs-md); }
