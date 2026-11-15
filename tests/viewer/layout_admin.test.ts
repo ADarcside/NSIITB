@@ -24,7 +24,7 @@ vi.mock('../../viewer/src/layout/lift_scene.js', () => ({
 }));
 
 const read = (p: string) => JSON.parse(readFileSync(fileURLToPath(new URL(p, import.meta.url)), 'utf8'));
-const grid = read('../../sample/test-capture/grid.json') as NavGrid;
+const grid = read('../../sample/test-capture/scn_hostelroomac/grid.json') as NavGrid;
 const pois = (read('../../sample/test-capture/pois.json') as PoiSet).pois;
 const SCENE = 'scn_test';
 const HASH = 'abcdef0123456789abcdef';

@@ -277,6 +277,14 @@ async function bootstrap() {
       return Math.hypot(poi.position.x - pose.x, poi.position.z - pose.z);
     };
 
+    // Spatial search: each result shows its walking distance from the visitor, nearest first on ties
+    navUI.setDistanceSource(pois => {
+      if (!movementController) return null;
+      const pose = movementController.pose;
+      if (planner) return planner.walkDistances({ x: pose.x, z: pose.z }, pois.map(poiGoal));
+      return pois.map(p => Math.hypot(p.position.x - pose.x, p.position.z - pose.z));
+    });
+
     const lookAtPoi = (poi: POI) => {
       movementController?.lookAt(
         poi.position.x,
@@ -347,9 +355,10 @@ async function bootstrap() {
           navUI.setAutoWalking(false);
           if (targetPoi) {
             const arrivedName = targetPoi.name;
+            const arrivedId = targetPoi.poi_id;
             celebrateArrival(currentPathPoints?.[currentPathPoints.length - 1]);
             endRoute();
-            navUI.showArrived(arrivedName);
+            navUI.showArrived(arrivedName, arrivedId);
           }
         },
         (stuck?: boolean) => {
@@ -1127,9 +1136,10 @@ async function bootstrap() {
             const distToGoal = Math.hypot(pose.x - goal.x, pose.z - goal.z);
             if (distToGoal < 0.6) {
               const arrivedName = targetPoi.name;
+              const arrivedId = targetPoi.poi_id;
               celebrateArrival(goal);
               endRoute();
-              navUI.showArrived(arrivedName);
+              navUI.showArrived(arrivedName, arrivedId);
             } else if (
               !movementController.isAutoWalking &&
               lastPlanPose &&

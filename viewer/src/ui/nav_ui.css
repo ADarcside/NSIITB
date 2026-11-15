@@ -107,10 +107,19 @@
 .nav-result-row.selected .nav-result-name { color: var(--ns-accent); }
 .nav-result-cat {
   flex: none;
+  margin-left: auto;
   font-size: var(--ns-fs-xs);
   font-weight: 500;
   color: var(--ns-text-muted);
   text-transform: lowercase;
+}
+.nav-result-dist {
+  flex: none;
+  min-width: 3.6em;
+  text-align: right;
+  font-size: var(--ns-fs-xs);
+  font-weight: 600;
+  color: var(--ns-text-muted);
 }
 .nav-result-empty {
   padding: var(--ns-space-3) 14px;

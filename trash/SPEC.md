@@ -6,11 +6,11 @@ Slice gate: end of 23 Oct. Code freeze: end of 29 Oct. Submit: 30 Oct. 31 Oct is
 ---
 
 ## 0. How to Use This Brief
-1. Save sections 1 to 5 in the repo root as `SPEC.md` (or Antigravity's rules file) so every task sees them.
-2. Give Antigravity one phase from section 6 at a time. Section 15 has ready prompts.
+1. Save sections 1 to 5 in the repo root as `SPEC.md` (or the coding assistant's rules file) so every task sees them.
+2. Give the coding assistant one phase from section 6 at a time. Section 15 has ready prompts.
 3. After each phase, make it run that phase's tests and show real output before moving on.
-4. Anything marked `[HUMAN]` cannot be done by Antigravity. It must stop and print exact instructions for the person.
-5. Values tagged `[U]` in the report (CLI flags, thresholds, some versions) are unverified. Antigravity must check them with `--help`, `npm view <pkg> versions` or `pip index versions <pkg>` before use, and record what it actually used.
+4. Anything marked `[HUMAN]` cannot be done by the coding assistant. It must stop and print exact instructions for the person.
+5. Values tagged `[U]` in the report (CLI flags, thresholds, some versions) are unverified. the coding assistant must check them with `--help`, `npm view <pkg> versions` or `pip index versions <pkg>` before use, and record what it actually used.
 
 ---
 
@@ -32,7 +32,7 @@ Round 1 is done only when all of these hold:
 
 ---
 
-## 2. Hard Rules for Antigravity
+## 2. Hard Rules for the coding assistant
 1. **Never invent results.** Every metric (registered ratio, reprojection error, PSNR, scale error, file size, load time, fps) must be produced by code and written to `run_report.json`. Placeholder numbers must be labelled as placeholders.
 2. **Pin exact versions and commit lockfiles.** Do not install any package published in the last 14 days. If a pinned version does not exist or conflicts, stop and report instead of silently changing it.
 3. **Forbidden dependencies:** OpenMVS (AGPL), OpenSplat (AGPL), plyfile (GPLv3, read PLY with NumPy instead), MASt3R/DUSt3R (non-commercial), VGGT (custom license), the original Inria Gaussian Splatting code. Record every dependency and license in `THIRD_PARTY_NOTICES.md`.
@@ -50,7 +50,7 @@ Round 1 is done only when all of these hold:
 
 ## 3. Who Does What
 - **`[HUMAN]` only:** capturing the video with tape marks, space owner consent, GPU access or rental, creating accounts (storage bucket, static host, GitHub), clicking the scale points if no automatic marker detection, the visual checks at gates G3, G4, G6, recording the demo, final submission, and checking the official challenge PDF.
-- **Antigravity:** all code, scripts, config, schemas, tests, README, SOP and checklist docs, notices, abstract draft structure, verification scripts. When it reaches a human step it stops and prints a short numbered instruction list.
+- **the coding assistant:** all code, scripts, config, schemas, tests, README, SOP and checklist docs, notices, abstract draft structure, verification scripts. When it reaches a human step it stops and prints a short numbered instruction list.
 
 ---
 

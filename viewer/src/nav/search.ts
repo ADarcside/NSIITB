@@ -75,11 +75,27 @@ export interface SearchHit {
   score: number;
 }
 
-/** POIs matching the query, best first. An empty query lists all POIs by name. */
-export function searchPois(pois: POI[], query: string, limit = 8): SearchHit[] {
+/** Text scores closer than this count as a tie, and the nearer place goes first */
+const TIE = 0.001;
+
+/**
+ * POIs matching the query, best first. With `distanceOf` (walking metres from the visitor, null when
+ * unknown) a tie in text score puts the nearer place first, and an empty query lists the nearest
+ * places first. Without it an empty query lists all POIs by name.
+ */
+export function searchPois(
+  pois: POI[],
+  query: string,
+  limit = 8,
+  distanceOf?: (poi: POI) => number | null
+): SearchHit[] {
+  const dist = (poi: POI): number => distanceOf?.(poi) ?? Infinity;
   const qs = tokens(query);
   if (!qs.length) {
-    return [...pois].sort((a, b) => a.name.localeCompare(b.name)).slice(0, limit).map(poi => ({ poi, score: 0 }));
+    return [...pois]
+      .sort((a, b) => dist(a) - dist(b) || a.name.localeCompare(b.name))
+      .slice(0, limit)
+      .map(poi => ({ poi, score: 0 }));
   }
   const hits: SearchHit[] = [];
   for (const poi of pois) {
@@ -90,6 +106,9 @@ export function searchPois(pois: POI[], query: string, limit = 8): SearchHit[] {
     const score = Math.max(name, alias, cat, desc);
     if (score > 0) hits.push({ poi, score });
   }
-  hits.sort((a, b) => b.score - a.score || a.poi.name.localeCompare(b.poi.name));
+  hits.sort((a, b) => {
+    if (Math.abs(b.score - a.score) > TIE) return b.score - a.score;
+    return dist(a.poi) - dist(b.poi) || a.poi.name.localeCompare(b.poi.name);
+  });
   return hits.slice(0, limit);
 }

@@ -97,7 +97,7 @@ If Google Colab GPU allocation is exhausted:
 
 ## 4. Human Verification Checkpoints `[HUMAN]`
 
-Per SPEC.md Section 8, the following steps must be visually inspected by the human operator:
+Per trash/SPEC.md Section 8, the following steps must be visually inspected by the human operator:
 - **Gate G3 Visual Inspection**: Open COLMAP sparse cloud (`sparse/0/points3D.txt`) in MeshLab or COLMAP GUI. Ensure room geometry is coherent without floating multi-room duplicate walls.
 - **Gate G4 Visual Inspection**: Inspect Nerfstudio test renders in Colab/RunPod. Verify absence of major visual artifacts or cloud collapse.
 

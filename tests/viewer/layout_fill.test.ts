@@ -11,7 +11,7 @@ import { planFloorFill, scaleColours, synthFloor, synthWall, wallStripFor, wallH
 import type { NavGrid } from '../../viewer/src/contracts/types.js';
 
 const read = (p: string) => JSON.parse(readFileSync(fileURLToPath(new URL(p, import.meta.url)), 'utf8'));
-const grid = read('../../sample/test-capture/grid.json') as NavGrid;
+const grid = read('../../sample/test-capture/scn_hostelroomac/grid.json') as NavGrid;
 const built = buildFloorPlanWithMasks(grid)!;
 const objects = movableObjects(grid, built.plan, built.masks);
 

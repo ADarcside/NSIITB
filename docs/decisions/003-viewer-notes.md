@@ -10,14 +10,14 @@ In the development synthetic test scene (`scripts/make_dev_scene.py`), the lite 
 
 For real room reconstructions (Phase 4):
 - The lite asset (< 30 MB, ~40% Gaussians) must **NOT** be selected randomly.
-- Per SPEC.md Section 8 (Stage 7 Compression), Gaussians must be ranked by **opacity times volume** ($\alpha \times s_x s_y s_z$), retaining the top 40% most visually significant Gaussians while discarding low-contribution and translucent Gaussians.
+- Per trash/SPEC.md Section 8 (Stage 7 Compression), Gaussians must be ranked by **opacity times volume** ($\alpha \times s_x s_y s_z$), retaining the top 40% most visually significant Gaussians while discarding low-contribution and translucent Gaussians.
 - Random selection causes severe visual spatter in real splat models; opacity-volume culling preserves geometric silhouettes and surfaces.
 
 ---
 
 ## 2. Production URL Hierarchy Reconciliation
 - In Phase 2, the viewer loader accepts `?scene=<sceneId>` and resolves manifests via `${baseUrl}/${sceneId}/manifest.json` (or `/dev/manifest.json` for synthetic dev scenes).
-- Per SPEC.md Section 8 (Stage 9 Publish), production asset publishing will use immutable versioned prefixes on public buckets:
+- Per trash/SPEC.md Section 8 (Stage 9 Publish), production asset publishing will use immutable versioned prefixes on public buckets:
   ```text
   spaces/<space_id>/scenes/<scene_id>/vNNN/manifest.json
   ```

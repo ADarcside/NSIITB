@@ -34,6 +34,13 @@ function escapeHtml(text: string): string {
   return div.innerHTML;
 }
 
+/** Walking distance cell of a search result ("2.4 m"), empty when it is not known */
+export function formatResultDistance(metres: number | null): string {
+  if (metres === null || !Number.isFinite(metres)) return '';
+  const text = metres < 10 ? `${metres.toFixed(1)} m` : `${Math.round(metres)} m`;
+  return `<span class="nav-result-dist ns-num" title="Walking distance from you">${text}</span>`;
+}
+
 const RESULTS_ID = 'nav-results-list';
 
 export class NavUI {
@@ -70,6 +77,9 @@ export class NavUI {
   private _isAutoWalking = false;
 
   private _pois: POI[] = [];
+  /** Walking metres from the visitor to each place (one floor-grid search for all), or null */
+  private _distanceSource: ((pois: POI[]) => (number | null)[] | null) | null = null;
+  private _hitDistances = new Map<string, number | null>();
   private _currentHits: SearchHit[] = [];
   private _selectedIndex = -1;
   private _arrivedTimer: number | null = null;
@@ -281,6 +291,11 @@ export class NavUI {
     }
   }
 
+  /** Spatial search: results show how far each place is to walk, and nearer places win ties */
+  setDistanceSource(fn: ((pois: POI[]) => (number | null)[] | null) | null): void {
+    this._distanceSource = fn;
+  }
+
   onPick(cb: (poi: POI) => void): void {
     this._pickCallbacks.push(cb);
   }
@@ -460,7 +475,9 @@ export class NavUI {
     this._routeCard.classList.remove('hidden');
   }
 
-  showArrived(name: string): void {
+  /** Arrival notice; the place card of that place (if open) stops showing the old distance */
+  showArrived(name: string, poiId?: string): void {
+    if (poiId && this._currentPoiCardItem?.poi_id === poiId) this._poiCardDist.textContent = "you're here";
     if (this._arrivedTimer !== null) {
       window.clearTimeout(this._arrivedTimer);
     }
@@ -753,7 +770,9 @@ export class NavUI {
     }
 
     const query = this._input.value.trim();
-    this._currentHits = searchPois(this._pois, query, 8);
+    const dists = this._distanceSource?.(this._pois) ?? null;
+    this._hitDistances = new Map(this._pois.map((p, i) => [p.poi_id, dists?.[i] ?? null]));
+    this._currentHits = searchPois(this._pois, query, 8, p => this._hitDistances.get(p.poi_id) ?? null);
     this._selectedIndex = this._currentHits.length > 0 ? 0 : -1;
     this._renderResults();
   }
@@ -775,6 +794,7 @@ export class NavUI {
       row.innerHTML = `
         <span class="nav-result-name">${escapeHtml(hit.poi.name)}</span>
         <span class="nav-result-cat">${escapeHtml(hit.poi.category || 'other')}</span>
+        ${formatResultDistance(this._hitDistances.get(hit.poi.poi_id) ?? null)}
       `;
 
       // Prevent input from blurring prematurely on mousedown

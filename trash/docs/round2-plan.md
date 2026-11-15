@@ -51,7 +51,7 @@ For the finale: 10 POIs in about 5 minutes, done while the scene trains on a fra
 
 `viewer/src/nav/search.ts` (done, tested): token match over name, aliases, category and description; prefix, one typo per word (two for long words), number words, and digits must match exactly ("Room 4" is not "Room 14").
 
-## Increments (Antigravity briefs in the project folder)
+## Increments (the coding assistant briefs in the project folder)
 
 | Brief | What | Done when |
 |---|---|---|

@@ -4,7 +4,7 @@
  * minimap, tag panel, POI labels, loading screen). Each UI module calls ensureTokens() before
  * injecting its own styles; the sheet is added once.
  *
- * The palette, type and shapes follow techfest.org's computed styles (see docs/ui-audit.md,
+ * The palette, type and shapes follow techfest.org's computed styles (the
  * "Techfest sibling theme"): near-black #0a0a0c page, navy glass rails with a pale-blue hairline,
  * gold #ffd700 -> #ffaa00 accents with dark text, rust #b53b26 secondary fills, sky #6fc4f2 hover,
  * Space Grotesk with uppercase tracked labels. Nothing is loaded from techfest.org.

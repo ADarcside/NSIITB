@@ -21,6 +21,14 @@ export interface ProjectedLabel {
 }
 
 /**
+ * Shows a label. The stylesheet hides pills, so a new one has an empty inline display, not 'none':
+ * anything that is not already 'block' is switched on (labels in the first view showed only after a move).
+ */
+export function revealLabel(style: { display: string }): void {
+  if (style.display !== 'block') style.display = 'block';
+}
+
+/**
  * Projects a 3D world position onto 2D screen coordinates.
  * When behind the camera (camera local z >= -0.01 or NDC z > 1), visible is false.
  */
@@ -470,7 +478,7 @@ export class RouteView {
     const placed: { l: number; t: number; r: number; b: number }[] = ui.slice();
     for (const s of shown) {
       const { el } = s;
-      if (el.style.display === 'none') el.style.display = 'block';
+      revealLabel(el.style);
       let size = this._labelSizes.get(el);
       if (!size || size.w === 0) {
         size = { w: el.offsetWidth, h: el.offsetHeight };

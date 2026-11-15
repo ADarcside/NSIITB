@@ -1,6 +1,6 @@
 /**
  * Namma Space: Rearrange objects and grid patch (viewer/src/layout/objects.ts, regrid.ts)
- * The test file is the live K-720 grid (sample/test-capture/grid.json).
+ * The test file is the live K-720 grid (sample/test-capture/scn_hostelroomac/grid.json).
  */
 
 import { describe, it, expect } from 'vitest';
@@ -12,7 +12,7 @@ import { patchGrid, unpackBits, packBits, PATCH_M, backToOriginal, type Move } f
 import type { NavGrid } from '../../viewer/src/contracts/types.js';
 
 const grid = JSON.parse(
-  readFileSync(fileURLToPath(new URL('../../sample/test-capture/grid.json', import.meta.url)), 'utf8')
+  readFileSync(fileURLToPath(new URL('../../sample/test-capture/scn_hostelroomac/grid.json', import.meta.url)), 'utf8')
 ) as NavGrid;
 const built = buildFloorPlanWithMasks(grid)!;
 const objects = movableObjects(grid, built.plan, built.masks);

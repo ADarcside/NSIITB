@@ -207,7 +207,7 @@ describe('buildFloorPlan', () => {
 
 describe('buildFloorPlan on the real K-720 grid', () => {
   const read = (f: string) => JSON.parse(readFileSync(fileURLToPath(new URL(`../../sample/test-capture/${f}`, import.meta.url)), 'utf8'));
-  const grid = read('grid.json') as NavGrid;
+  const grid = read('scn_hostelroomac/grid.json') as NavGrid;
   const pois = (read('pois.json') as PoiSet).pois;
   const plan = buildFloorPlan(grid)!;
 
@@ -300,7 +300,7 @@ describe('tags on the plan', () => {
 
 describe('K-720 tags on the plan', () => {
   const read = (f: string) => JSON.parse(readFileSync(fileURLToPath(new URL(`../../sample/test-capture/${f}`, import.meta.url)), 'utf8'));
-  const grid = read('grid.json') as NavGrid;
+  const grid = read('scn_hostelroomac/grid.json') as NavGrid;
   const pois = (read('pois.json') as PoiSet).pois;
   const fp = buildFloorPlanWithMasks(grid)!;
   const lay = layoutTags(grid, fp.plan, fp.masks, pois);

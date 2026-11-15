@@ -222,12 +222,80 @@ export class NavPlanner {
     if (!cells) return null;
     const keep = this._smooth(cells);
     const points = keep.map(i => this.cellCentre(i));
-    // Start where the walker really is when that spot is walkable
-    if (this.isWalkable(from.x, from.z)) points[0] = { x: from.x, z: from.z };
+    // Start where the walker really is when that spot is walkable. The straight line from there
+    // to the next corner must keep as much room from furniture as the line it replaces; when it
+    // doesn't, the route keeps its first cell centre and just starts with a short step onto it.
+    if (this.isWalkable(from.x, from.z)) {
+      const real = { x: from.x, z: from.z };
+      if (points.length < 2) points[0] = real;
+      else {
+        const fc = this.cellAt(from.x, from.z)!;
+        const minClear = Math.min(PREFERRED_CLEARANCE_M, this._clear[fc[1] * this.grid.width + fc[0]], this._segMinClear(points[0], points[1]));
+        if (this._segClear(real, points[1], minClear, 0.05)) points[0] = real;
+        else if (Math.hypot(real.x - points[0].x, real.z - points[0].z) > 1e-6) points.unshift(real);
+      }
+    }
     if (points.length === 1) points.push({ ...points[0] });
     let lengthM = 0;
     for (let k = 1; k < points.length; k++) lengthM += Math.hypot(points[k].x - points[k - 1].x, points[k].z - points[k - 1].z);
     return { points, lengthM };
+  }
+
+  /**
+   * Walking distance in metres from `from` to every goal at once (spatial search: "how far is each
+   * place from me"). One search over the floor grid (8 moves, no cutting corners past blocked cells),
+   * stopping once every goal is reached. Goals snap to the floor the same way findPath snaps them.
+   * Null for a goal that can't be reached. A little longer than a drawn route, which is smoothed.
+   */
+  walkDistances(from: Point2, goals: Point2[], goalSnapM = GOAL_SNAP_M): (number | null)[] {
+    const out: (number | null)[] = goals.map(() => null);
+    const s = this.nearestFreeCell(from.x, from.z);
+    if (s < 0) return out;
+    const area = this._area[s];
+    const wanted = new Map<number, number[]>();
+    goals.forEach((goal, k) => {
+      let t = this.nearestFreeCell(goal.x, goal.z, goalSnapM);
+      if (t >= 0 && this._area[t] !== area) {
+        t = this.isWalkable(goal.x, goal.z) ? -1 : this.nearestFreeCell(goal.x, goal.z, goalSnapM, area);
+      }
+      if (t < 0) return;
+      const list = wanted.get(t);
+      if (list) list.push(k);
+      else wanted.set(t, [k]);
+    });
+    let left = wanted.size;
+    if (!left) return out;
+    const g = this.grid;
+    const w = g.width, free = this._free;
+    const dist = new Float64Array(free.length).fill(Infinity);
+    const done = new Uint8Array(free.length);
+    const heap = new Heap();
+    dist[s] = 0;
+    heap.push(0, s);
+    while (heap.size > 0 && left > 0) {
+      const cur = heap.pop();
+      if (done[cur]) continue;
+      done[cur] = 1;
+      const hit = wanted.get(cur);
+      if (hit) {
+        for (const k of hit) out[k] = dist[cur] * g.cell_m;
+        left--;
+      }
+      const cc = cur % w, cr = (cur - cc) / w;
+      for (const [dc, dr, len] of NEIGHBOURS) {
+        const nc = cc + dc, nr = cr + dr;
+        if (nc < 0 || nr < 0 || nc >= w || nr >= g.height) continue;
+        const ni = nr * w + nc;
+        if (!free[ni] || done[ni]) continue;
+        if (dc !== 0 && dr !== 0 && (!free[cr * w + nc] || !free[nr * w + cc])) continue;
+        const d = dist[cur] + len;
+        if (d < dist[ni]) {
+          dist[ni] = d;
+          heap.push(d, ni);
+        }
+      }
+    }
+    return out;
   }
 
   /** 4-connected labelling of the walking mask (iterative flood fill). */
@@ -428,10 +496,29 @@ export class NavPlanner {
 
   /** Every cell centre on the segment a-b is walkable with clearance >= minClear. */
   private _lineClear(a: number, b: number, minClear: number): boolean {
+    return this._segClear(this.cellCentre(a), this.cellCentre(b), minClear);
+  }
+
+  /** Lowest clearance (m) of the cells along the segment pa-pb (0 when it leaves the floor). */
+  private _segMinClear(pa: Point2, pb: Point2): number {
     const g = this.grid;
-    const pa = this.cellCentre(a), pb = this.cellCentre(b);
+    const steps = Math.max(1, Math.ceil(Math.hypot(pb.x - pa.x, pb.z - pa.z) / (g.cell_m * 0.25)));
+    let min = Infinity;
+    for (let k = 0; k <= steps; k++) {
+      const u = k / steps;
+      const cell = this.cellAt(pa.x + (pb.x - pa.x) * u, pa.z + (pb.z - pa.z) * u);
+      if (!cell) return 0;
+      const i = cell[1] * g.width + cell[0];
+      min = Math.min(min, this._free[i] ? this._clear[i] : 0);
+    }
+    return min;
+  }
+
+  /** Every point sampled (every `stepCells` cells) on the segment pa-pb is walkable with clearance >= minClear. */
+  private _segClear(pa: Point2, pb: Point2, minClear: number, stepCells = 0.25): boolean {
+    const g = this.grid;
     const dist = Math.hypot(pb.x - pa.x, pb.z - pa.z);
-    const steps = Math.max(1, Math.ceil(dist / (g.cell_m * 0.25)));
+    const steps = Math.max(1, Math.ceil(dist / (g.cell_m * stepCells)));
     for (let k = 1; k < steps; k++) {
       const u = k / steps;
       const cell = this.cellAt(pa.x + (pb.x - pa.x) * u, pa.z + (pb.z - pa.z) * u);

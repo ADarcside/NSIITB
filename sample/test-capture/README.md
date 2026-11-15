@@ -8,22 +8,24 @@ This folder is the sample data for the repo. It holds the real room we reconstru
 | `scn_hostelroomac/full.spz` | the full Gaussian splat, 2,005,123 Gaussians, 45 MB (S07) |
 | `scn_hostelroomac/lite.spz` | the phone version, top 12% of Gaussians, 5 MB (S07) |
 | `scn_hostelroomac/grid.json` | the 5 cm walkable collision grid with 28 height layers (S06) |
+| `pois.json` | Round 2: the 14 tagged places (name, category, aliases, position, standing spot). Same file as on the live `/round2/` site. |
 
-These are the same files that are live at https://adarcside.github.io/namma-space/ .
+These are the same files that are live at https://adarcside.github.io/namma-space/round2/ .
 
 ## Open the sample room in the viewer (no GPU)
 
-Needs Node 22.12 or newer.
+Needs Node 22.12 or newer, and Python with jsonschema to attach the tags.
 
 ```bash
-git clone https://github.com/ADarcside/NSIITB.git aR
+git clone -b round-2 https://github.com/ADarcside/NSIITB.git aR
 cd aR
 mkdir -p viewer/public && cp -r sample/test-capture/scn_hostelroomac viewer/public/
+python -m pipeline.pois attach viewer/public/scn_hostelroomac sample/test-capture/pois.json
 cd viewer && npm ci && npm run dev
 # open http://localhost:5173/?scene=scn_hostelroomac
 ```
 
-Click the canvas, then WASD to move and the mouse to look. Q / E fly down and up, F switches to Walk mode, R resets.
+Click the canvas, then WASD to move and the mouse to look. Press `/` to search the places and click a label to get a path. Q / E fly down and up, F switches to Walk mode, R resets.
 
 ## Check the sample against its manifest
 

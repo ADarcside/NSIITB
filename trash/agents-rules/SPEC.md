@@ -1,4 +1,4 @@
-# Antigravity Standing Rules for Namma Space
+# the coding assistant Standing Rules for Namma Space
 
 Source: SPEC.md in workspace root.
 

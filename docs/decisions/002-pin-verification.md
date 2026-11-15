@@ -7,7 +7,7 @@ Resolved / Pins Adjusted (14-Day Rule)
 2026-10-17 (Updated 2026-10-18)
 
 ## Context
-Per Hard Rule 2 in `SPEC.md`:
+Per Hard Rule 2 in `trash/SPEC.md`:
 > "Pin exact versions and commit lockfiles. Do not install any package published in the last 14 days. If a pinned version does not exist or conflicts, stop and report instead of silently changing it."
 
 Audit timestamp: **2026-10-17T15:32:00Z**. Threshold for 14-day rule: published on or before **2026-10-03T00:00:00Z** (>= 14 days old).
@@ -66,7 +66,7 @@ Per user decision enforcing Hard Rule 2, all 4 flagged pins are downgraded to th
 | `@playcanvas/splat-transform` | `3.10.1` | `3.9.0` | 2026-10-02T12:53:51Z | 15 | Compression CLI tool. Peer dependency `playcanvas@^2.0.0` satisfied. |
 | `numpy` | `2.5.4` | `2.5.3` | 2026-09-06T16:24:29Z | 41 | Verified compatibility with `scipy==1.18.1`, `opencv-python-headless==4.14.0.94`, and `open3d==0.20.0`. |
 
-`SPEC.md` and the initial project report remain unchanged as historical records; the adjusted pins are enforced in `viewer/package.json`, `viewer/package-lock.json`, and `requirements-tools.txt`.
+`trash/SPEC.md` and the initial project report remain unchanged as historical records; the adjusted pins are enforced in `viewer/package.json`, `viewer/package-lock.json`, and `requirements-tools.txt`.
 
 ### 4.1 Phase 2 Types Resolution (@types/three)
 During Phase 2, ambient handwritten declarations for Three.js and Spark were replaced with exact-pinned type packages. `@types/three@0.186.0` was audited against the 14-day rule prior to installation:

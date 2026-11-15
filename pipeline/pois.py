@@ -14,7 +14,6 @@ import sys
 from typing import Any, Dict
 
 from pipeline.common import sha256_file
-from pipeline.grid import decode_free_bits, to_cell
 from pipeline.validator import (
     load_and_validate_manifest,
     load_and_validate_pois,
@@ -107,6 +106,9 @@ def attach_pois(scene_dir: str | Path, pois_path: str | Path, fix_scene_id: bool
 
 
 def check_pois(scene_dir: str | Path) -> None:
+    # Imported here so attach works without OpenCV (grid.py needs it)
+    from pipeline.grid import decode_free_bits, to_cell
+
     scene_dir = Path(scene_dir).resolve()
     if not scene_dir.is_dir():
         sys.exit(f"Error: Scene directory '{scene_dir}' does not exist.")

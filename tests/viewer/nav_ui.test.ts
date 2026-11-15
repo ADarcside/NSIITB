@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { isTypingTarget } from '../../viewer/src/ui/app_ui.js';
-import { projectLabel } from '../../viewer/src/nav/route_view.js';
+import { projectLabel, revealLabel } from '../../viewer/src/nav/route_view.js';
 import { searchPois } from '../../viewer/src/nav/search.js';
 import type { POI } from '../../viewer/src/contracts/types.js';
 
@@ -104,5 +104,22 @@ describe('searchPois for NavUI', () => {
     expect(searchPois(samplePois, 'desk')[0].poi.name).toBe('Study desk');
     expect(searchPois(samplePois, 'table')[0].poi.name).toBe('Study desk');
     expect(searchPois(samplePois, 'studyy')[0].poi.name).toBe('Study desk');
+  });
+});
+
+describe('revealLabel', () => {
+  it('shows a new label whose inline display is still empty (first view, before any camera move)', () => {
+    const style = { display: '' };
+    revealLabel(style);
+    expect(style.display).toBe('block');
+  });
+
+  it('shows a label that was hidden and leaves a shown one alone', () => {
+    const hidden = { display: 'none' };
+    revealLabel(hidden);
+    expect(hidden.display).toBe('block');
+    const shown = { display: 'block' };
+    revealLabel(shown);
+    expect(shown.display).toBe('block');
   });
 });

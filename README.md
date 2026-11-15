@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="https://adarcside.github.io/namma-space/"><img alt="Live demo" src="https://img.shields.io/badge/walk_the_room-live_demo-fbbf24?style=flat-square"></a>
+  <a href="https://adarcside.github.io/namma-space/round2/"><img alt="Live Round 2 demo" src="https://img.shields.io/badge/Round_2-live_demo-fbbf24?style=flat-square"></a>
   <img alt="Techfest IIT Bombay" src="https://img.shields.io/badge/Techfest_IIT_Bombay-Namma_Space_challenge-a78bfa?style=flat-square">
   <img alt="Gaussian splatting" src="https://img.shields.io/badge/3D-Gaussian_splatting-fb7185?style=flat-square">
   <a href="https://github.com/ADarcside/NSIITB/actions/workflows/ci.yml?query=branch%3Around-2"><img alt="CI" src="https://github.com/ADarcside/NSIITB/actions/workflows/ci.yml/badge.svg?branch=round-2"></a>
@@ -11,10 +11,12 @@
 </p>
 
 <p align="center">
-  <b><a href="https://adarcside.github.io/namma-space/">Walk the room</a></b> ·
+  <b><a href="https://adarcside.github.io/namma-space/round2/">Walk the room (Round 2)</a></b> ·
+  <a href="#for-judges-round-2-criteria">For judges</a> ·
+  <a href="docs/round2.md">How search and paths work</a> ·
   <a href="docs/sop.md">Capture SOP</a> ·
   <a href="docs/field-checklist.md">Field checklist</a> ·
-  <a href="#2-set-up-a-gpu-machine-for-reconstruction">Run it yourself</a>
+  <a href="#1-try-the-viewer-no-gpu">Run it yourself</a>
 </p>
 
 ---
@@ -39,13 +41,23 @@ Round 2 adds **POI labels, search and walkable-path navigation** to the same vie
 
 The Round 1 link above stays as it was submitted.
 
+### For judges: Round 2 criteria
+
+| Criterion | Where to see it live | Where it is in the code |
+|---|---|---|
+| **Spatial indexing & POI tagging** | 14 places in 6 categories float over the room; the minimap (`N`) shows them on the floor plan. Open the site with `?tag=1` and press `P` to tag a place. | Walkable floor grid, connected areas and clearance in [`astar.ts`](viewer/src/nav/astar.ts); places in [`pois.ts`](viewer/src/nav/pois.ts) and [`pois.schema.json`](pipeline/schemas/pois.schema.json); attach with [`pipeline/pois.py`](pipeline/pois.py). Explained in [docs/round2.md](docs/round2.md#the-spatial-index). |
+| **Pathfinding accuracy** | Search a place and pick it: the gold path bends around the bunks and keeps clear of furniture. **Take me there** walks it. Routes to all 14 places and all 182 place-to-place pairs are found. | A* with a clearance cost and string pulling in [`astar.ts`](viewer/src/nav/astar.ts); tests in [`nav.test.ts`](tests/viewer/nav.test.ts) and [`k720_tags.test.ts`](tests/viewer/k720_tags.test.ts). |
+| **Search UI & transition** | Press `/`. Each result shows its walking distance from you; try "dor" (typo), "almirah" (alias) or "sleep" (nearest bunk first). Picking a result turns the camera smoothly to the place and draws the route. | [`search.ts`](viewer/src/nav/search.ts), [`nav_ui.ts`](viewer/src/ui/nav_ui.ts), labels in [`route_view.ts`](viewer/src/nav/route_view.ts). |
+| **Code cleanliness & repo setup** | CI badge above: typecheck, viewer tests, build and pipeline tests on every push. | [Run it yourself](#1-try-the-viewer-no-gpu) needs no GPU; [repository layout](#6-repository-layout). |
+
 - **Labels:** tagged places float over the room. Click one to see its card, with the walking distance and **Navigate** / **Look**.
-- **Search** (`/`): it handles typos ("dor"), word order, aliases ("almirah" finds the cupboard) and number words, and "Room 4" never matches "Room 14".
+- **Spatial search** (`/`): every result shows how far it is to walk from where you stand, measured along the floor, and when two places match equally the nearer one comes first. It handles typos ("dor"), word order, aliases ("almirah" finds the cupboards) and number words, and "Room 4" never matches "Room 14".
 - **Paths that avoid furniture:** A* on the scene's walkable floor grid, kept clear of walls and bunks, drawn as a glowing line on the floor that updates as you walk. **Take me there** walks you along it.
 - **Floor-plan minimap** (`N`): the room footprint, every POI, you, and your route.
-- **Tagging in minutes:** open the viewer with `?tag=1`, walk to a spot, press `P`, type a name. Export `pois.json` and attach it to the scene with `python -m pipeline.pois attach <scene_dir> pois.json`. To move a tag, press `T` (Adjust mode) and drag its label or its minimap dot. A tag can sit anywhere, even on a bunk, and its route ends at the closest floor spot. Ten places took us about 4 minutes.
+- **Tagging in minutes:** open the viewer with `?tag=1`, walk to a spot, press `P`, type a name. Export `pois.json` and attach it to the scene with `python -m pipeline.pois attach <scene_dir> pois.json`. To move a tag, press `T` (Adjust mode) and drag its label or its minimap dot. A tag can sit anywhere, even on a bunk, and its route ends at the closest floor spot. Fourteen places took us a few minutes.
+- **Rearrange furniture** (in the **…** menu): slide and rotate furniture in your own browser, and the floor grid, paths and distances follow the new layout. The owner can save a layout for everyone from tag mode.
 
-To see the tags locally, copy `sample/test-capture/pois.json` into `viewer/public/` as well (next to the scene, see [Try the viewer](#1-try-the-viewer-no-gpu)) and open `http://localhost:5173/?scene=scn_hostelroomac&pois=/pois.json`.
+The local steps in [Try the viewer](#1-try-the-viewer-no-gpu) attach the tags to the sample room, so they show without extra URL options.
 
 **Save to live (owner only).** On the live `/round2/` site, tag mode has a **Save to live** button. It commits the places straight to the site repository (`pois.json` plus the manifest's checksum for it) and to `sample/test-capture/pois.json` on this branch, and GitHub Pages shows them about a minute later. It asks once per browser for a fine-grained GitHub token with *Contents: read and write* on those two repositories; the token stays in that browser's local storage and never ships with the site. A build gets the button only when the targets are set:
 
@@ -61,7 +73,7 @@ scripts/build_site.sh <scene_dir> site
 - **Play with friends**: the gold button in the top bar opens multiplayer after a short warning (your mic turns on in a room, and anyone with the invite link can join). Pick a cartoon character, create a room, and send the invite link. Up to 2 to 6 people (it depends on the room's walkable floor area) walk the same scene, see each other move, and talk by voice. **Go** next to a friend's name draws the Round 2 path to them, and **G** points at a spot for everyone. **Leave** goes back to exploring alone. Reset and the collision mode sit in the **…** menu.
 - The relay is a small Cloudflare Worker that passes messages between the people in a room and stores nothing. Voice goes browser to browser. The multiplayer code only downloads after you press Continue. Setup, local testing and the build switches (`VITE_MP_URL`, and `VITE_MP_BUTTON=0` to hide the button) are in [multiplayer/README.md](multiplayer/README.md).
 
-The details are in [docs/round2-plan.md](docs/round2-plan.md). The data format is in [pipeline/schemas/pois.schema.json](pipeline/schemas/pois.schema.json), the pathfinder in [viewer/src/nav/astar.ts](viewer/src/nav/astar.ts), and search in [viewer/src/nav/search.ts](viewer/src/nav/search.ts).
+How the spatial index, search and pathfinding work is in [docs/round2.md](docs/round2.md). The data format is in [pipeline/schemas/pois.schema.json](pipeline/schemas/pois.schema.json), the pathfinder in [viewer/src/nav/astar.ts](viewer/src/nav/astar.ts), and search in [viewer/src/nav/search.ts](viewer/src/nav/search.ts).
 
 ## How a room becomes a link
 
@@ -105,10 +117,10 @@ All of this went back into the [SOP](docs/sop.md), which is written to be repeat
 
 ## 1. Try the viewer (no GPU)
 
-Needs **Node 22.12 or newer** and **Python 3.10+** with NumPy (to build a small synthetic test room).
+Needs **Node 22.12 or newer** and **Python 3.10+** with NumPy and jsonschema (`pip install numpy jsonschema`), to build a small synthetic test room and attach the tags.
 
 ```bash
-git clone https://github.com/ADarcside/NSIITB.git aR
+git clone -b round-2 https://github.com/ADarcside/NSIITB.git aR
 cd aR/viewer
 npm ci
 npm run make:dev-scene      # writes a synthetic room to viewer/public/dev/ (not committed)
@@ -117,11 +129,13 @@ npm run dev
 
 Open http://localhost:5173/ . With no `?scene=` the viewer loads the synthetic dev scene.
 
-To open our real reconstructed room instead, copy the sample scene in and add `?scene=`:
+To open our real reconstructed room with its 14 tagged places, copy the sample scene in, attach the tags and add `?scene=`:
 ```bash
 mkdir -p public && cp -r ../sample/test-capture/scn_hostelroomac public/
+(cd .. && python -m pipeline.pois attach viewer/public/scn_hostelroomac sample/test-capture/pois.json)
 # open http://localhost:5173/?scene=scn_hostelroomac
 ```
+Then press `/` to search, click a label, or pick **Navigate** to see a path.
 
 Controls: click the canvas to capture the mouse, **WASD** to walk, mouse to look, **Q / E** to fly down and up (eye height 0.7 to 2.7 m), the Reset button to return to the start position. Esc releases the mouse.
 
@@ -192,7 +206,7 @@ which python ffmpeg node     # all inside ~/mamba/envs/tools
 
 ### 2.5 Clone and create the Nerfstudio environment
 ```bash
-cd ~ && git clone https://github.com/ADarcside/NSIITB.git aR && cd aR
+cd ~ && git clone -b round-2 https://github.com/ADarcside/NSIITB.git aR && cd aR
 uv venv notebooks/ns-env --python 3.10
 uv pip install --python notebooks/ns-env/bin/python \
   torch==2.1.2+cu118 torchvision==0.16.2+cu118 --extra-index-url https://download.pytorch.org/whl/cu118
@@ -274,7 +288,7 @@ npx vite preview --outDir site      # optional local check of the built site
 
 We host it on GitHub Pages from a separate repository ([ADarcside/namma-space](https://github.com/ADarcside/namma-space)) that holds only the built site: push the contents of `site/` to the `main` branch root of that repository, with Pages set to serve from `main` / root.
 
-**Public Round 1 viewer: https://adarcside.github.io/namma-space/** (hostel room K-720).
+**Public Round 2 viewer: https://adarcside.github.io/namma-space/round2/** (hostel room K-720 with places, search and paths). The Round 1 viewer stays at https://adarcside.github.io/namma-space/ .
 
 ---
 
@@ -300,14 +314,18 @@ On Windows, run the Python parts inside WSL and open the repo from WSL in VS Cod
 | `pipeline/run_pipeline.py` | the orchestrator, S01–S08 |
 | `pipeline/stages/` | one file per stage |
 | `pipeline/config/` | `default.yaml`, `room.yaml` (thresholds and stage settings; the hash is recorded in every report) |
-| `pipeline/schemas/` | JSON schemas for `capture.json`, `manifest.json` and the navigation grid |
+| `pipeline/schemas/` | JSON schemas for `capture.json`, `manifest.json`, the navigation grid and `pois.json` |
+| `pipeline/pois.py` | attach and check a scene's places (`pois.json`) |
 | `viewer/` | the browser viewer (TypeScript, Three.js, Spark, Vite) |
+| `viewer/src/nav/` | Round 2: places, search, pathfinding, route drawing, save to live |
+| `viewer/src/layout/` | Rearrange: moving furniture and the shared layout |
 | `multiplayer/` | the room relay (Cloudflare Worker) and the editable avatar `.blend` files; `tools/avatars/` builds the characters |
 | `tests/` | pytest and Vitest suites; `tests/fixtures/` has template JSON files |
 | `sample/test-capture/` | sample data: the published K-720 scene (manifest, full and lite SPZ, walkable grid), see its README |
 | `docs/sop.md`, `docs/field-checklist.md` | how to capture |
+| `docs/round2.md` | how the spatial index, search and pathfinding work |
 | `docs/decisions/` | short records of tool and format decisions |
-| `SPEC.md` | the Round 1 specification and repo rules |
+| `trash/` | old notes and duplicates kept for reference, not used by anything |
 
 ---
 
@@ -315,7 +333,7 @@ On Windows, run the Python parts inside WSL and open the repo from WSL in VS Cod
 
 We're **team NoGrass**: **Satvik Garg** and **Aditya Gupta**, two students at VIT Vellore, building this for the Namma Space challenge at Techfest, IIT Bombay. K-720 is one of our own hostel rooms, which made it the obvious first test subject.
 
-**Built with.** Namma Space stands on COLMAP, Nerfstudio and gsplat, PyTorch, Three.js, Spark, PlayCanvas splat-transform, OpenCV, NumPy and more. Every dependency and its licence is in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). We also leaned on AI coding assistants for much of the code and docs; [SPEC.md](SPEC.md) is the brief we worked from. The filming, the measuring, and the calls on what to ship were ours.
+**Built with.** Namma Space stands on COLMAP, Nerfstudio and gsplat, PyTorch, Three.js, Spark, PlayCanvas splat-transform, OpenCV, NumPy and more. Every dependency and its licence is in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). We also leaned on AI coding assistants for much of the code and docs. The filming, the measuring, and the calls on what to ship were ours.
 
 Our own code is under the [MIT licence](LICENSE).
 

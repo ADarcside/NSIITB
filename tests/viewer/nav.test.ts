@@ -181,3 +181,77 @@ describe('standing spot (approach)', () => {
     expect(validatePoiSet(makePoiSet('scn_aaaaaaaaaaaa', [poi as never])).join()).toMatch(/approach/);
   });
 });
+
+describe('walkDistances (spatial search)', () => {
+  it('gives walking distance around the wall, not straight-line distance', () => {
+    const p = new NavPlanner(gridFrom(ROOM));
+    const [near, behindWall] = p.walkDistances({ x: 0.55, z: 0.85 }, [{ x: 0.55, z: 0.25 }, { x: 1.55, z: 0.85 }]);
+    expect(near).toBeCloseTo(0.6, 1);
+    // Straight line is 1.0 m, but the walk goes up round the end of the wall
+    expect(behindWall!).toBeGreaterThan(1.4);
+    // The drawn route keeps away from the wall, so it is a little longer than the grid walk
+    const path = p.findPath({ x: 0.55, z: 0.85 }, { x: 1.55, z: 0.85 })!;
+    expect(behindWall!).toBeLessThanOrEqual(path.lengthM + 1e-9);
+    expect(behindWall!).toBeGreaterThan(path.lengthM * 0.75);
+  });
+
+  it('gives null for a goal the walker cannot reach', () => {
+    const closed = ['.....#.....', '.....#.....', '.....#.....'];
+    const p = new NavPlanner(gridFrom(closed));
+    expect(p.walkDistances({ x: 0.15, z: 0.15 }, [{ x: 0.95, z: 0.15 }, { x: 0.35, z: 0.15 }])).toEqual([null, expect.any(Number)]);
+  });
+});
+
+describe('route start where the walker stands', () => {
+  it('starts at the walker and the first leg does not cut furniture corners', () => {
+    const block = ['..............', '..............', '..............', '.....####.....', '.....####.....',
+      '.....####.....', '..............', '..............', '..............', '..............'];
+    const p = new NavPlanner(gridFrom(block));
+    const goals = [{ x: 0.15, z: 0.15 }, { x: 1.25, z: 0.85 }, { x: 0.65, z: 0.05 }, { x: 0.65, z: 0.75 }];
+    let legs = 0, clipped = 0;
+    for (let x = 0.01; x < 1.4; x += 0.023) {
+      for (let z = 0.01; z < 1.0; z += 0.023) {
+        if (!p.isWalkable(x, z)) continue;
+        for (const goal of goals) {
+          const path = p.findPath({ x, z }, goal);
+          if (!path || path.points.length < 2) continue;
+          expect(path.points[0]).toEqual({ x, z });
+          const [a, b] = path.points;
+          legs++;
+          for (let u = 0; u <= 1; u += 0.01) {
+            if (!p.isWalkable(a.x + (b.x - a.x) * u, a.z + (b.z - a.z) * u)) {
+              clipped++;
+              break;
+            }
+          }
+        }
+      }
+    }
+    // Swapping in the walker's spot without a check clipped about 3% of first legs; only hairline
+    // touches on cell edges are left now
+    expect(legs).toBeGreaterThan(5000);
+    expect(clipped / legs).toBeLessThan(0.003);
+  });
+});
+
+describe('searchPois with distances', () => {
+  const pois = [
+    makePoi('scn_aaaaaaaaaaaa', 'Bunk 1', 5, 0, { category: 'sleep' }),
+    makePoi('scn_aaaaaaaaaaaa', 'Bunk 2', 1, 0, { category: 'sleep' }),
+    makePoi('scn_aaaaaaaaaaaa', 'Door', 3, 0, { category: 'exit' }),
+  ];
+  const dist = (poi: { position: { x: number } }) => poi.position.x;
+
+  it('puts the nearer place first when the text matches equally', () => {
+    expect(searchPois(pois, 'sleep', 8, dist).map(h => h.poi.name)).toEqual(['Bunk 2', 'Bunk 1']);
+    expect(searchPois(pois, 'sleep').map(h => h.poi.name)).toEqual(['Bunk 1', 'Bunk 2']);
+  });
+
+  it('lists the nearest places first for an empty query', () => {
+    expect(searchPois(pois, '', 8, dist).map(h => h.poi.name)).toEqual(['Bunk 2', 'Door', 'Bunk 1']);
+  });
+
+  it('keeps a better text match ahead of a nearer place', () => {
+    expect(searchPois(pois, 'bunk 1', 8, dist)[0].poi.name).toBe('Bunk 1');
+  });
+});
