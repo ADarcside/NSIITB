@@ -1,4 +1,4 @@
-# Capture SOP (v1.3)
+# Capture SOP (v1.4)
 
 This is how one person with one phone captures an indoor space so the pipeline can turn it into a walkable 3D scene. It is written to be repeated on an unseen venue under time pressure, so every step is short and has a reason.
 
@@ -95,6 +95,7 @@ For the live finale or a quick re-capture. Same rules, but walk at **0.3 m/s** a
 - **Close windows** before filming so curtains and loose fabric stay still.
 - In a long shoot, rest your arms between passes **by pausing, not by lowering the phone fast or stopping the recording**. Hold still for a few seconds, then carry on.
 - If something moves (a person walks in, a curtain swings), say the time out loud on the video or note it, and film that area again before you finish.
+- **For moving furniture later:** film the floor and the wall behind each piece that may be moved (around and between legs, and the wall strip just above it) from at least two angles. The viewer fills a moved piece's old spot from the floor and wall around it, so those must be in the scan. After publishing, open tag mode, then Layout, then Fix boxes, and check each furniture box (about 5 min).
 - The room config samples 3 frames per second (about 6,300 from 35 min) and keeps the sharpest 1,000 to 1,200. Slower walking means more of those frames are sharp, which is why the long plan is slower, not just longer.
 
 ## 3. Optional second clip (3 to 5 min)
@@ -179,6 +180,7 @@ Every stage has a measured pass/fail gate. A failed gate means reshoot or reproc
 - **Anything that moves** during filming leaves smears, including the operator's own feet and shadow and curtains in a draught.
 - **Views below waist height** show the floor edge-on and look fuzzy, so the viewer limits eye height to 0.7 to 2.7 m.
 - **Under-filmed areas** (most often the ceiling and the wall you entered by) come out blotchy or missing. The ceiling passes exist for this reason.
+- **Moving furniture** shows only what was filmed. The old spot is filled with made-up floor and wall, and an object's unseen back or underside stays thin.
 - The human steps are: consent, clearing the room, filming, measuring, the playback check, and the three visual checks at G3, G4 and G6. The rest is run by the pipeline.
 
 ## 9. Lessons from the first real capture (hostel room K-720, 25 Oct 2026)
@@ -195,6 +197,7 @@ Every stage has a measured pass/fail gate. A failed gate means reshoot or reproc
 | Version | Date | Change |
 |---|---|---|
 | v1.0.0 | 24 Oct 2026 | First SOP, from the Round 1 master guide |
+| v1.4.0 | 15 Nov 2026 | Film the floor and wall behind movable furniture; check furniture boxes in tag mode after publishing |
 | v1.3.0 | 29 Oct 2026 | Floor passes aimed 1 m ahead (operator out of shot), trouble-spot pass (high corners, shiny vents, curtains), close windows, lessons from the room_v2 reshoot |
 | v1.2.0 | 27 Oct 2026 | Full 30 to 35 min plan for K-720 (4 passes per surface, 0.2 m/s); 12 to 15 min plan kept as the quick plan |
 | v1.1.0 | 27 Oct 2026 | Distance, pass count and method for each part of the room; added ceiling pass and "looking across" laps, made room measurements required (scale source), tape pairs become backup and check, timings and lessons from the K-720 capture |

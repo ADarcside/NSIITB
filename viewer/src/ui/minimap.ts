@@ -115,6 +115,8 @@ export class MinimapUI {
   private readonly _forceGrid: boolean;
   private _layout: PlanLayout | null = null;
   private _layoutKey = '';
+  /** Rearrange: moved objects drawn as turned boxes, and the tags that moved with them */
+  private _planMoves: { corners: Map<number, { x: number; z: number }[]>; pois: Set<string>; key: string } = { corners: new Map(), pois: new Set(), key: '' };
   private _planCanvas: HTMLCanvasElement | null = null;
   private _planCanvasKey = '';
   private _grid: NavGrid | null = null;
@@ -217,6 +219,18 @@ export class MinimapUI {
     this._relocateCallbacks.push(cb);
   }
 
+  /**
+   * Rearrange: boxes in `corners` (plan box id -> the four corners after the move) are drawn turned
+   * at their new spot; tags in `pois` moved with their object and are drawn at their real spot.
+   */
+  setPlanMoves(corners: Map<number, { x: number; z: number }[]>, pois: Set<string>): void {
+    const key = [...corners].map(([id, c]) => `${id}:${c.map(p => `${p.x.toFixed(3)},${p.z.toFixed(3)}`).join(' ')}`).join(';') + '|' + [...pois].sort().join(',');
+    if (key === this._planMoves.key) return;
+    this._planMoves = { corners, pois, key };
+    this._layoutKey = '';
+    this._planCanvasKey = '';
+  }
+
   setGrid(grid: NavGrid): void {
     this._grid = grid;
     this._updateMapping();
@@ -267,6 +281,7 @@ export class MinimapUI {
   /** Where a POI's dot is drawn: on its box, or its real spot while tags are being adjusted */
   private _dotWorld(poi: POI): { x: number; z: number } {
     if (this._isTagMode && this._placeMode) return { x: poi.position.x, z: poi.position.z };
+    if (this._planMoves.pois.has(poi.poi_id)) return { x: poi.position.x, z: poi.position.z };
     return this._layout?.dots.get(poi.poi_id) ?? { x: poi.position.x, z: poi.position.z };
   }
 
@@ -275,11 +290,12 @@ export class MinimapUI {
     if (!this._plan || !this._grid) return;
     const key = pois
       .map((p) => `${p.poi_id}|${p.name}|${p.category ?? ''}|${(p.aliases ?? []).join(',')}|${p.position.x.toFixed(3)}|${p.position.z.toFixed(3)}`)
-      .join(';');
+      .join(';') + `#${this._planMoves.key}`;
     if (key === this._layoutKey && this._layout) return;
     this._layoutKey = key;
     try {
-      this._layout = layoutTags(this._grid, this._plan.plan, this._plan.masks, pois);
+      const still = this._planMoves.pois.size ? pois.filter(p => !this._planMoves.pois.has(p.poi_id)) : pois;
+      this._layout = layoutTags(this._grid, this._plan.plan, this._plan.masks, still);
     } catch (err) {
       console.warn('[minimap] tag layout failed', err);
       this._layout = null;
@@ -319,6 +335,22 @@ export class MinimapUI {
 
     // Furniture boxes
     for (const b of boxes) {
+      const turned = this._planMoves.corners.get(b.id);
+      if (turned) {
+        ctx.beginPath();
+        turned.forEach((p, i) => {
+          const q = P(p.x, p.z);
+          if (i === 0) ctx.moveTo(q.px, q.py);
+          else ctx.lineTo(q.px, q.py);
+        });
+        ctx.closePath();
+        ctx.fillStyle = THEME.planBox;
+        ctx.fill();
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = THEME.planBoxLine;
+        ctx.stroke();
+        continue;
+      }
       const a = P(b.minX, b.minZ);
       const c = P(b.maxX, b.maxZ);
       const x = a.px + 0.5, y = a.py + 0.5;

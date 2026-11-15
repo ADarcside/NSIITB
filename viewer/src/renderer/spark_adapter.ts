@@ -96,6 +96,11 @@ export class SparkSceneRenderer implements SceneRenderer {
     return this._scene;
   }
 
+  /** The loaded scan (null before the first load); replaced when lite and full swap */
+  get splatMesh(): SplatMesh | null {
+    return this._splatMesh;
+  }
+
   /** Render resolution scale (1 = CSS pixels). Lower values trade sharpness for speed on weak GPUs. */
   setPixelRatio(ratio: number): void {
     if (this._isDisposed) return;

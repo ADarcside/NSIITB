@@ -14,6 +14,8 @@
 
 import type { Id, POI } from '../contracts/types.js';
 import { makePoiSet } from './pois.js';
+import { layoutText, type BoxEdit } from '../layout/layout_file.js';
+import type { Move } from '../layout/regrid.js';
 
 export interface SaveTarget {
   owner: string;
@@ -227,18 +229,8 @@ export async function savePoisLive(
   const message = `tags: update ${pois.length} places`;
 
   const dir = config.live.path;
-  if (opts.expectedBase !== undefined && !opts.force) {
-    const liveText = await gh.readText(config.live, `${dir}/pois.json`, true);
-    let liveBase: string | null = null;
-    try {
-      liveBase = liveText ? ((JSON.parse(liveText) as { updated_at?: string }).updated_at ?? null) : null;
-    } catch {
-      liveBase = null;
-    }
-    if (liveBase !== opts.expectedBase) {
-      throw new SaveError('The live tags changed since you opened tag mode (saved from another tab or by someone else).', false, true);
-    }
-  }
+  await checkBase(gh, config.live, `${dir}/pois.json`, opts,
+    'The live tags changed since you opened tag mode (saved from another tab or by someone else).');
   const manifestPath = `${dir}/manifest.json`;
   const manifestText = (await gh.readText(config.live, manifestPath))!;
   const manifestScene = (JSON.parse(manifestText) as { scene_id?: string }).scene_id;
@@ -254,6 +246,50 @@ export async function savePoisLive(
   let sourceCommit: string | undefined;
   if (config.source) {
     sourceCommit = await gh.commitFiles(config.source, { [config.source.path]: text }, message);
+  }
+  return { liveCommit, sourceCommit, updatedAt };
+}
+
+/** Stops with a conflict when the live file's updated_at is not the one the edit started from */
+async function checkBase(gh: GitHub, t: SaveTarget, path: string, opts: SaveOptions, message: string): Promise<void> {
+  if (opts.expectedBase === undefined || opts.force) return;
+  const liveText = await gh.readText(t, path, true);
+  let liveBase: string | null = null;
+  try {
+    liveBase = liveText ? ((JSON.parse(liveText) as { updated_at?: string }).updated_at ?? null) : null;
+  } catch {
+    liveBase = null;
+  }
+  if (liveBase !== opts.expectedBase) throw new SaveError(message, false, true);
+}
+
+/**
+ * Commits the room layout for everyone (layout.json next to the live manifest, and next to the
+ * source copy of pois.json when configured). layout.json is not a manifest asset, so the manifest
+ * stays as it is and older viewers simply show the room as scanned.
+ */
+export async function saveLayoutLive(
+  config: SaveConfig,
+  token: string,
+  layout: { sceneId: Id; gridHash: string; moves: Move[]; locked: number[]; boxes?: BoxEdit[] },
+  fetchImpl: Fetch = fetch.bind(globalThis),
+  opts: SaveOptions = {}
+): Promise<SaveResult> {
+  const gh = new GitHub(token, fetchImpl);
+  const updatedAt = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+  const text = layoutText(layout.sceneId, layout.gridHash, layout.moves, layout.locked, updatedAt, layout.boxes);
+  const n = layout.moves.length;
+  const message = n ? `layout: ${n} piece${n === 1 ? '' : 's'} moved` : 'layout: room as scanned';
+  const dir = config.live.path;
+  await checkBase(gh, config.live, `${dir}/layout.json`, opts,
+    'The live room layout changed since you loaded it (saved from another tab or by someone else).');
+  const manifestScene = (JSON.parse((await gh.readText(config.live, `${dir}/manifest.json`))!) as { scene_id?: string }).scene_id;
+  if (manifestScene !== layout.sceneId) throw new SaveError(`The live manifest is for ${manifestScene}, not ${layout.sceneId}.`);
+  const liveCommit = await gh.commitFiles(config.live, { [`${dir}/layout.json`]: text }, message);
+  let sourceCommit: string | undefined;
+  if (config.source) {
+    const srcDir = config.source.path.includes('/') ? config.source.path.replace(/\/[^/]*$/, '') : '';
+    sourceCommit = await gh.commitFiles(config.source, { [srcDir ? `${srcDir}/layout.json` : 'layout.json']: text }, message);
   }
   return { liveCommit, sourceCommit, updatedAt };
 }

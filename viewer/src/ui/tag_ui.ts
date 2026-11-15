@@ -39,7 +39,7 @@ export interface TagUIOptions {
   saveConfig?: SaveConfig | null;
 }
 
-interface ConfirmOptions {
+export interface ConfirmOptions {
   title: string;
   confirmLabel: string;
   /** Default 'Cancel' */
@@ -638,6 +638,29 @@ export class TagUI {
     } finally {
       this._setSaving(false);
     }
+  }
+
+  /** The saved GitHub key, or asks for it (null: the editor cancelled). Shared with the layout Save. */
+  async getKey(): Promise<string | null> {
+    let token = tokenStore.get();
+    if (!token) {
+      token = await this._askKey();
+      if (!token) return null;
+      tokenStore.set(token);
+      this._syncKeyUi();
+    }
+    return token;
+  }
+
+  /** A refused key: forget it so the next Save asks again */
+  forgetKey(): void {
+    tokenStore.clear();
+    this._syncKeyUi();
+  }
+
+  /** Yes / no question in tag mode's own dialog */
+  ask(opts: ConfirmOptions): Promise<boolean> {
+    return this._confirm(opts);
   }
 
   private _saveOnce(token: string, force: boolean) {

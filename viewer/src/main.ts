@@ -25,7 +25,7 @@ import { TouchControls } from './controls/touch_controls.js';
 import { isTouchDevice } from './ui/device.js';
 import { NavPlanner, type Point2 } from './nav/astar.js';
 import { validatePoiSet, PoiDraftStore, poiGoal } from './nav/pois.js';
-import { saveConfigFromEnv } from './nav/publish.js';
+import { saveConfigFromEnv, saveLayoutLive, SaveError } from './nav/publish.js';
 import { shareUrl, resolvePoiRef } from './nav/share.js';
 import { activeRoute, arGuideLoader } from './nav/active_route.js';
 import type { TagUI } from './ui/tag_ui.js';
@@ -35,7 +35,10 @@ import {
   fetchAndValidateManifest,
   loadSceneSplatAsset,
   fetchAssetWithVerification,
+  resolveManifestUrl,
+  resolveAssetUrl,
 } from './loader/manifest.js';
+import { parseLayout, type PublishedLayout } from './layout/layout_file.js';
 import { ViewerError } from './types.js';
 import { preventPageZoom, resetPageZoom } from './ui/no_page_zoom.js';
 import type { NavGrid, POI } from './contracts/types.js';
@@ -214,6 +217,10 @@ async function bootstrap() {
 
     let planner: NavPlanner | null = null;
     let loadedGrid: NavGrid | null = null;
+    // Rearrange (move furniture, visitor mode behind ?rearrange=1): loaded on demand once the grid is in
+    let rearrange: { update: () => void; refreshPois: () => void; setPaused: (on: boolean) => void } | null = null;
+    /** True while the Rearrange panel is open (the 3D view then drags furniture instead of grabbing the mouse) */
+    let rearrangeOpen = (): boolean => false;
     let targetPoi: POI | null = null;
     /** Start of the route when it is another place ("From" picker or ?from=); null = from the walker */
     let routeFrom: POI | null = null;
@@ -393,6 +400,135 @@ async function bootstrap() {
         .catch(err => console.warn('[Viewer] AR guidance unavailable:', err));
     }
 
+    /**
+     * The room layout for everyone (layout.json next to the manifest, optional). Not a manifest asset,
+     * so it is fetched fresh each visit and a missing file just means the room as scanned.
+     */
+    const layoutFile: Promise<string | null> = searchParams.get('layout') === 'off'
+      ? Promise.resolve(null)
+      : fetch(resolveAssetUrl('layout.json', resolveManifestUrl(sceneParam, baseUrl)), { cache: 'no-cache' })
+        .then(res => (res.ok ? res.text() : null))
+        .catch(() => null);
+
+    /**
+     * Rearrange: the layout in use is applied to the grid, the tags, the minimap and the scene.
+     * Everyone gets the published layout; ?rearrange=1 adds the private Rearrange panel, and tag
+     * mode the admin one that saves the layout for everyone.
+     */
+    const startRearrange = async (gridData: NavGrid, gridHash: string) => {
+      const text = await layoutFile;
+      let published: PublishedLayout | null = null;
+      if (text) {
+        const parsed = parseLayout(text, manifest.scene_id, gridHash);
+        if (parsed.warning && !text.trimStart().startsWith('<')) console.warn('[Viewer]', parsed.warning);
+        published = parsed.layout;
+      }
+      const mode = isTagMode ? 'admin' : searchParams.get('rearrange') === '1' ? 'visitor' : 'view';
+      if (mode === 'view' && !published?.moves.length) return;
+      try {
+        const [{ RearrangeController }, { RearrangeUI }, { movedCorners }] = await Promise.all([
+          import('./layout/rearrange.js'),
+          import('./ui/rearrange_ui.js'),
+          import('./layout/layout.js'),
+        ]);
+        let rrUI: InstanceType<typeof RearrangeUI> | null = null;
+        const rr = new RearrangeController({
+          sceneId: manifest.scene_id,
+          gridHash,
+          grid: gridData,
+          start: { x: manifest.start_pose.x, z: manifest.start_pose.z },
+          scene: renderer.scene,
+          getMesh: () => renderer.splatMesh,
+          worldFromSplat: manifest.transform.world_from_splat,
+          getPose: () => movementController?.pose ?? { x: manifest.start_pose.x, z: manifest.start_pose.z },
+          // Tag mode owns the tags (an unsaved draft may differ from the live ones): admin leaves them as they are
+          getPois: () => (mode === 'admin' ? activePois : manifestPois),
+          applyGrid: g => {
+            gridProvider = new GridCollisionProvider(g);
+            planner = new NavPlanner(g);
+            if (activeMode === 'Grid') movementController?.setCollision(gridProvider);
+            if (targetPoi) planRoute(targetPoi, false);
+          },
+          applyPois: list => {
+            if (mode === 'admin') return;
+            activePois = list;
+            navUI.setPois(activePois);
+            routeView.setPois(activePois);
+            if (targetPoi) targetPoi = activePois.find(p => p.poi_id === targetPoi!.poi_id) ?? targetPoi;
+          },
+          applyPlanMoves: (objects, moves, movedPois) => {
+            const byId = new Map(objects.map(o => [o.id, o]));
+            minimap?.setPlanMoves(new Map(moves.filter(m => byId.has(m.id)).map(m => [m.id, movedCorners(byId.get(m.id)!, m)])), movedPois);
+          },
+          toast: msg => rrUI?.toast(msg),
+          layoutOff: searchParams.get('layout') === 'off',
+          mode,
+          published: published ? { moves: published.moves, locked: published.locked, boxes: published.boxes, updatedAt: published.updated_at } : undefined,
+        });
+        const saveConfig = saveConfigFromEnv(import.meta.env);
+        /** Admin: Save for everyone (same GitHub key and live folder as the tags) */
+        const saveLayout = async () => {
+          const toast = (msg: string) => rrUI?.toast(msg);
+          if (!saveConfig || !tagUI) return toast('Saving is not set up for this build');
+          const cut = rr.unreachable();
+          if (cut.length) return toast(`Not saved: ${cut.slice(0, 3).join(', ')}${cut.length > 3 ? ` and ${cut.length - 3} more` : ''} can't be reached`);
+          const token = await tagUI.getKey();
+          if (!token) return;
+          const n = rr.moves.length;
+          const ok = await tagUI.ask({
+            title: n ? `Save this layout (${n} piece${n === 1 ? '' : 's'} moved) for everyone?` : 'Put the room back as scanned for everyone?',
+            confirmLabel: 'Save for everyone',
+          });
+          if (!ok) return;
+          const layout = { sceneId: manifest.scene_id, gridHash, moves: rr.moves, locked: rr.locked, boxes: rr.boxEdits };
+          try {
+            let res;
+            try {
+              res = await saveLayoutLive(saveConfig, token, layout, undefined, { expectedBase: rr.baseUpdatedAt });
+            } catch (err) {
+              if (!(err instanceof SaveError && err.conflict)) throw err;
+              const overwrite = await tagUI.ask({ title: `${err.message} Replace it with yours?`, confirmLabel: 'Replace live layout', cancelLabel: 'Keep live layout' });
+              if (!overwrite) return toast('Not saved. Reload the page to see the live layout.');
+              res = await saveLayoutLive(saveConfig, token, layout, undefined, { force: true });
+            }
+            rr.markPublished(res.updatedAt);
+            toast('Saved. The live site updates in about a minute.');
+          } catch (err) {
+            if (err instanceof SaveError && err.badToken) {
+              tagUI.forgetKey();
+              toast(`${err.message} Press Save to enter the key again.`);
+            } else {
+              toast(`Not saved: ${err instanceof Error ? err.message : String(err)}`);
+            }
+          }
+        };
+        if (mode !== 'view') {
+          rrUI = new RearrangeUI(rr, {
+            getPose: () => movementController?.pose ?? { x: 0, z: 0, yaw: 0 },
+            onOpenChange: () => movementController?.clearKeys(),
+            save: mode === 'admin' ? saveLayout : undefined,
+          });
+          // Laptop extra: drag a piece straight in the 3D view while the panel is open
+          const ray = new THREE.Raycaster();
+          rrUI.attach3D(canvas, (cx, cy) => {
+            const rect = canvas.getBoundingClientRect();
+            ray.setFromCamera(new THREE.Vector2(((cx - rect.left) / rect.width) * 2 - 1, -((cy - rect.top) / rect.height) * 2 + 1), camera);
+            return { origin: ray.ray.origin, dir: ray.ray.direction };
+          });
+          rearrangeOpen = () => rrUI?.isOpen ?? false;
+        }
+        rr.start();
+        rearrange = rr;
+        if (import.meta.env.DEV) (window as unknown as { __rr?: unknown }).__rr = { rr, ui: rrUI };
+        if (rrUI) {
+          const tip = mode === 'admin' ? 'Move furniture for everyone' : 'Move furniture around (only you see it)';
+          ui.addAction('rearrange-btn', 'rearrange', mode === 'admin' ? 'Layout' : 'Rearrange', '', tip, () => rrUI?.toggle());
+        }
+      } catch (err) {
+        console.warn('[Viewer] Rearrange unavailable:', err);
+      }
+    };
+
     // If grid asset is defined in manifest, attempt to load it in background
     if (manifest.assets.grid && manifest.asset_table[manifest.assets.grid]) {
       const gridAsset = manifest.asset_table[manifest.assets.grid];
@@ -411,6 +547,7 @@ async function bootstrap() {
           activeMode = 'Grid';
           movementController?.setCollision(gridProvider);
           ui.setMode(activeMode);
+          void startRearrange(gridData, gridAsset.sha256);
         })
         .catch(err => {
           console.warn('[Viewer] Optional NavGrid could not be loaded:', err);
@@ -450,6 +587,17 @@ async function bootstrap() {
     // Dev builds only: lets screenshot scripts place the camera
     if (import.meta.env.DEV) {
       (window as unknown as { __movementController?: FirstPersonMovementController }).__movementController = movementController;
+      // Rearrange phase 0 proof (move furniture): console / script harness, never in a site build
+      if (searchParams.get('rearrange') === 'proof') {
+        void import('./layout/proof.js').then(({ mountRearrangeProof }) =>
+          mountRearrangeProof({
+            scene: renderer.scene,
+            getMesh: () => renderer.splatMesh,
+            getGrid: () => loadedGrid,
+            worldFromSplat: manifest.transform.world_from_splat,
+          })
+        );
+      }
     }
 
     // 6b. Tag Mode UI & POIs Loading (Round 2)
@@ -642,6 +790,7 @@ async function bootstrap() {
           tagUI.setPois(activePois);
         }
       }
+      rearrange?.refreshPois();
       openDeepLink();
     };
 
@@ -695,6 +844,7 @@ async function bootstrap() {
       import('./net/multiplayer.js')
         .then(mp => {
           const { STANCE_SLIDE, STANCE_CROUCH, FLAG_AIR, FLAG_CLIMB } = mp;
+          if (!embedded) rearrange?.setPaused(true);
           multiplayer = mp.startMultiplayer(
             {
               scene: renderer.scene,
@@ -715,7 +865,7 @@ async function bootstrap() {
               getRouteTargetId: () => targetPoi?.poi_id ?? null,
             },
             undefined,
-            embedded ? { embedded: true, onActiveChange: active => ui.setFriendsButtonVisible(!active) } : {}
+            embedded ? { embedded: true, onActiveChange: active => { ui.setFriendsButtonVisible(!active); rearrange?.setPaused(active); } } : {}
           );
           if (!multiplayer && embedded) {
             mpStarting = false;
@@ -764,7 +914,7 @@ async function bootstrap() {
 
     // Pointer Lock click-to-lock
     canvas.addEventListener('click', () => {
-      if (tagUI?.isFormOpen) return;
+      if (tagUI?.isFormOpen || rearrangeOpen()) return;
       // Touch screens look by dragging (iOS has no pointer lock)
       if (touchControls || typeof canvas.requestPointerLock !== 'function') return;
       if (document.pointerLockElement !== canvas) {
@@ -1000,6 +1150,7 @@ async function bootstrap() {
       }
 
       multiplayer?.update(dt);
+      rearrange?.update();
 
       // Update route ribbon animation and POI label overlays
       routeView.update(camera, dt);

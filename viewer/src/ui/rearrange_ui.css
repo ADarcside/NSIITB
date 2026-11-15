@@ -1,0 +1,126 @@
+/* Rearrange (move furniture): panel with an enlarged floor plan, loaded on demand */
+.rr-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 450;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: var(--ns-edge);
+  pointer-events: none;
+  font-family: var(--ns-font);
+  color: var(--ns-text);
+}
+.rr-layer.hidden { display: none; }
+.rr-panel {
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ns-space-2);
+  width: min(560px, 100%);
+  max-height: calc(100dvh - var(--ns-hud-top) - var(--ns-target) - 32px);
+  padding: var(--ns-space-3);
+  border-radius: var(--ns-radius-lg);
+  border: 1px solid var(--ns-border-strong);
+  /* Nearly opaque: in tag mode the Places panel sits right behind it */
+  background: rgba(10, 12, 20, 0.97);
+  /* Own backdrop: the buttons' glass blur then shows the panel, not what lies behind it */
+  backdrop-filter: blur(8px);
+  box-shadow: var(--ns-shadow);
+}
+.rr-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--ns-space-2);
+}
+.rr-title { font-size: var(--ns-fs-md); }
+.rr-note { font-size: var(--ns-fs-xs); color: var(--ns-text-muted); }
+.rr-canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  min-height: 160px;
+  border-radius: var(--ns-radius-md);
+  background: #0d1220;
+  touch-action: none;
+  cursor: grab;
+}
+.rr-canvas.dragging { cursor: grabbing; }
+.rr-hint { font-size: var(--ns-fs-sm); color: var(--ns-text-muted); min-height: 1.4em; }
+.rr-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ns-space-2);
+}
+.rr-tools .ns-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 var(--ns-space-3);
+  font-size: var(--ns-fs-sm);
+}
+.rr-tools .ns-btn:disabled { opacity: 0.4; cursor: default; }
+.rr-tools .rr-done { margin-left: auto; }
+.rr-toasts {
+  position: fixed;
+  top: calc(var(--ns-hud-top) + var(--ns-target) + 16px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--ns-space-2);
+  max-width: calc(100% - 2 * var(--ns-edge));
+  z-index: 520;
+  pointer-events: none;
+  font-family: var(--ns-font);
+}
+.rr-toast {
+  background: var(--ns-surface-strong);
+  color: var(--ns-text);
+  border: 1px solid var(--ns-border-strong);
+  padding: var(--ns-space-2) var(--ns-space-4);
+  border-radius: var(--ns-radius-pill);
+  font-size: var(--ns-fs-md);
+  font-weight: 600;
+  box-shadow: var(--ns-shadow);
+  overflow-wrap: anywhere;
+  transition: opacity var(--ns-dur) var(--ns-ease-out);
+}
+.rr-toast.fade-out { opacity: 0; }
+@media (max-width: 640px) {
+  .rr-panel { padding: var(--ns-space-2); }
+  .rr-tools .ns-btn span { display: none; }
+  .rr-tools .ns-btn { padding: 0 var(--ns-space-2); }
+}
+/* Phones and tablets: finger-sized buttons */
+@media (pointer: coarse) {
+  .rr-tools .ns-btn { min-height: 44px; min-width: 44px; justify-content: center; }
+}
+/* Short screens (phone held sideways): plan on the left, buttons in a column on the right */
+@media (max-height: 500px) {
+  .rr-panel {
+    width: min(720px, 100%);
+    height: calc(100dvh - var(--ns-hud-top) - var(--ns-target) - 32px);
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto 1fr auto;
+    padding: var(--ns-space-2);
+  }
+  .rr-head { grid-column: 1 / -1; }
+  .rr-canvas { grid-column: 1; grid-row: 2; aspect-ratio: auto; height: 100%; min-height: 0; }
+  .rr-hint { grid-column: 1; grid-row: 3; min-height: 0; }
+  .rr-tools {
+    grid-column: 2;
+    grid-row: 2 / 4;
+    display: grid;
+    grid-template-columns: repeat(2, 44px);
+    grid-auto-rows: 44px;
+    gap: 6px;
+    align-content: start;
+  }
+  .rr-tools .ns-btn { padding: 0; justify-content: center; }
+  .rr-tools .ns-btn span { display: none; }
+  .rr-tools .rr-done { margin-left: 0; }
+}

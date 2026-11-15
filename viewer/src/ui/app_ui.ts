@@ -124,6 +124,8 @@ export class VanillaAppUI implements AppUI {
   private readonly _moveValue: HTMLElement;
   private readonly _resetButton: HTMLElement;
   private _friendsBtn: HTMLButtonElement | null = null;
+  /** Where extra actions go: the More menu on the Round 2 page, else the action row */
+  private _extraActions: { parent: HTMLElement; make: (id: string, iconName: string, label: string, key: string, title: string, parentEl?: HTMLElement) => HTMLButtonElement; inMenu: boolean } | null = null;
   private readonly _moveButton: HTMLElement;
   private readonly _volumeBox: HTMLElement;
   private readonly _volumeIcon: HTMLElement;
@@ -360,6 +362,7 @@ export class VanillaAppUI implements AppUI {
 
     topHud.appendChild(actionGroup);
     this._root.appendChild(topHud);
+    this._extraActions = { parent: useMenu ? menuList : actionGroup, make: makeAction, inMenu: useMenu };
 
     // 3. Loading screen (real download progress, room name, one rotating tip)
     const room = roomLabel(options.sceneId ?? '');
@@ -498,6 +501,26 @@ export class VanillaAppUI implements AppUI {
   }
 
   /** Hides the "Play with friends" button while the multiplayer lobby or a room is open */
+  /**
+   * Adds an action button (in the More menu on the Round 2 page, else in the action row), for
+   * features that load on demand. Returns the button, or null before the HUD exists.
+   */
+  addAction(id: string, iconName: string, label: string, key: string, title: string, onClick: () => void): HTMLButtonElement | null {
+    const x = this._extraActions;
+    if (!x) return null;
+    const btn = x.make(id, iconName, label, key, title, x.parent);
+    if (!key) {
+      btn.querySelector('kbd')?.remove();
+      btn.setAttribute('aria-label', label);
+    }
+    if (x.inMenu) btn.setAttribute('role', 'menuitem');
+    btn.addEventListener('click', () => {
+      btn.blur();
+      onClick();
+    });
+    return btn;
+  }
+
   setFriendsButtonVisible(visible: boolean): void {
     this._friendsBtn?.closest('.hud-friends')?.classList.toggle('hidden', !visible);
   }
