@@ -41,6 +41,11 @@ Round 2 adds **POI labels, search and walkable-path navigation** to the same vie
 
 ### → [adarcside.github.io/namma-space/round2](https://adarcside.github.io/namma-space/round2/)
 
+<p align="center">
+  <a href="https://adarcside.github.io/namma-space/round2/"><img src="docs/assets/round2-route.jpg" alt="The live Round 2 viewer in room K-720: place labels over the room, a gold path on the floor to the Front door, the place card, the route card and the minimap" width="100%"></a>
+</p>
+<p align="center"><sub>The live viewer: search "Front door", and a walkable path, the place card, the route card and the minimap show up.</sub></p>
+
 The Round 1 link above stays as it was submitted.
 
 ### For judges: Round 2 criteria
