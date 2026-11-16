@@ -1,4 +1,4 @@
-# Capture SOP (v1.5)
+# Capture SOP (v1.6)
 
 This is how one person with one phone captures an indoor space so the pipeline can turn it into a walkable 3D scene. It is written to be repeated on an unseen venue under time pressure, so every step is short and has a reason.
 
@@ -110,6 +110,13 @@ If the playback check in step 4 shows a weak area, film a short separate clip of
    - **length** (long axis), **width** (short axis), **height** (floor to ceiling).
    - Measure each twice. If the two readings differ by more than 2 cm, measure a third time.
 4. **Write down** the device model and OS version, the time you started filming, the lighting ("all room lights on, curtains drawn"), and anything odd (a mirror, a person walked through at 6:40).
+5. **Sketch the floor plan (2 min).** On one sheet of paper, draw the room from above. It does not need to be to scale, but it must show:
+   - the outline of the walls with the **length and width** written on them, and the **height** in a corner;
+   - every **door and window**, and the large furniture (beds, tables, cupboards);
+   - the tape marks **A, B, C, D** and where you started and ended the video (mark A);
+   - an arrow for **north** or for the main entrance, so the sketch can be matched to the model.
+
+   For more than one room, draw **one sketch per floor**, number the rooms in the order you filmed them, and mark each doorway and staircase you walked through. Photograph the sketch and keep it with `capture.json`. The pipeline does not read it: it builds its own floor plan (the walkable grid and the minimap) from the video. The sketch is the human check that the model's shape, size and doorways are right at gate G6, and it is what you tag places against.
 
 ## 5. Getting the video to the GPU machine
 
@@ -181,7 +188,8 @@ Every stage has a measured pass/fail gate. A failed gate means reshoot or reproc
 - **Views below waist height** show the floor edge-on and look fuzzy, so the viewer limits eye height to 0.7 to 2.7 m.
 - **Under-filmed areas** (most often the ceiling and the wall you entered by) come out blotchy or missing. The ceiling passes exist for this reason.
 - **Moving furniture** shows only what was filmed. The old spot is filled with made-up floor and wall, and an object's unseen back or underside stays thin.
-- The human steps are: consent, clearing the room, filming, measuring, the playback check, and the three visual checks at G3, G4 and G6. The rest is run by the pipeline.
+- **One room per scene so far.** For several rooms on one floor, the plan is one continuous walk through the doorways; this is not yet tested on a real multi-room space. Separate floors are not joined: each floor is its own scene.
+- The human steps are: consent, clearing the room, filming, measuring, the floor-plan sketch, the playback check, and the three visual checks at G3, G4 and G6. The rest is run by the pipeline.
 
 ## 9. Lessons from the first real capture (hostel room K-720, 25 Oct 2026)
 
@@ -220,6 +228,7 @@ The AR guide is a bonus on top of the 3D room. Skip this section if there is no 
 |---|---|---|
 | v1.0.0 | 24 Oct 2026 | First SOP, from the Round 1 master guide |
 | v1.4.0 | 15 Nov 2026 | Film the floor and wall behind movable furniture; check furniture boxes in tag mode after publishing |
+| v1.6.0 | 16 Nov 2026 | Floor-plan sketch before leaving the room (section 4, step 5); note on several rooms and floors |
 | v1.5.0 | 15 Nov 2026 | New section 10: setting up the AR guide at a venue (marks, build, QR sheet, phone steps) |
 | v1.3.0 | 29 Oct 2026 | Floor passes aimed 1 m ahead (operator out of shot), trouble-spot pass (high corners, shiny vents, curtains), close windows, lessons from the room_v2 reshoot |
 | v1.2.0 | 27 Oct 2026 | Full 30 to 35 min plan for K-720 (4 passes per surface, 0.2 m/s); 12 to 15 min plan kept as the quick plan |

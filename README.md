@@ -33,6 +33,8 @@ Our first real space is one of our own hostel rooms, K-720, bunks and all, filme
 
 Laptops load the full scene straight away; phones start with a lighter version so the first view arrives fast on mobile data. Walls, beds and bunk posts are solid, and you can fly up with **E** to look over the top bunk.
 
+**One room so far.** Rounds 1 and 2 show one complete room: all four walls, floor, ceiling and furniture. For a space with several rooms on one floor, the plan is one continuous walk through the doorways, run through the same pipeline as a single scene; we have not tested that on a real multi-room space yet. Separate floors are not joined: today each floor would be its own scene with its own link.
+
 ## Round 2: find a place, follow the path
 
 Round 2 adds **POI labels, search and walkable-path navigation** to the same viewer. All of it lives on this branch, [`round-2`](https://github.com/ADarcside/NSIITB/tree/round-2). The [`main`](https://github.com/ADarcside/NSIITB/tree/main) branch stays exactly as we submitted it for Round 1.
@@ -296,7 +298,7 @@ npx vite preview --outDir site      # optional local check of the built site
 ```
 `site/` holds `index.html`, `assets/` and `<scene_id>/`. The scene opens by default (no `?scene=` needed), and all paths are relative, so the site works from a sub-path such as GitHub Pages. Local test scenes in `viewer/public/` are left out.
 
-We host it on GitHub Pages from a separate repository ([ADarcside/namma-space](https://github.com/ADarcside/namma-space)) that holds only the built site: push the contents of `site/` to the `main` branch root of that repository, with Pages set to serve from `main` / root.
+We host it on GitHub Pages from a separate repository (`ADarcside/namma-space`) that holds only the built site: push the contents of `site/` to the `main` branch root of that repository, with Pages set to serve from `main` / root.
 
 **Public Round 2 viewer: https://adarcside.github.io/namma-space/round2/** (hostel room K-720 with places, search and paths). The Round 1 viewer stays at https://adarcside.github.io/namma-space/ .
 
@@ -344,6 +346,20 @@ On Windows, run the Python parts inside WSL and open the repo from WSL in VS Cod
 We're **team NoGrass**: **Satvik Garg** and **Aditya Gupta**, two students at VIT Vellore, building this for the Namma Space challenge at Techfest, IIT Bombay. K-720 is one of our own hostel rooms, which made it the obvious first test subject.
 
 **Built with.** Namma Space stands on COLMAP, Nerfstudio and gsplat, PyTorch, Three.js, Spark, PlayCanvas splat-transform, OpenCV, NumPy and more. Every dependency and its licence is in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). We also leaned on AI coding assistants for much of the code and docs. The filming, the measuring, and the calls on what to ship were ours.
+
+**Services and cost.** Namma Space calls no paid API. Reconstruction runs on our own GPU, and everything a visitor touches is a static file or a free service:
+
+| Job | What we use | Cost |
+|---|---|---|
+| Reconstruction (COLMAP, Splatfacto) | self-hosted: one lab PC with an NVIDIA RTX A4000 (16 GB), about 7.4 h for K-720 | no API fee; about 1 to 2 kWh of electricity per room |
+| Hosting the viewer and scene | GitHub Pages (static files) | free |
+| Multiplayer relay | Cloudflare Workers, free plan (about 100,000 requests a day; an hour with six people is roughly 15,000) | free |
+| Voice chat connection | public STUN servers (Cloudflare, Google); voice goes browser to browser | free |
+| Voice guide | the browser's built-in speech, no text-to-speech API | free |
+| Search, paths, minimap, AR | run in the browser, no server | free |
+| Save to live (owner only) | GitHub REST API with the owner's own token | free |
+
+So the API bill is zero, and the comparison with self-hosted GPU infrastructure is simple: the only compute cost is the GPU machine we already had. A rented cloud GPU or a hosted reconstruction API would bill for those same hours on every room and would send the video off site; we needed neither. The multiplayer relay is the one hosted piece, and it can be self-hosted with `wrangler dev` or left out with `VITE_MP_BUTTON=0`.
 
 Our own code is under the [MIT licence](LICENSE).
 
