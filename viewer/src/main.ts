@@ -673,22 +673,15 @@ async function bootstrap() {
     // Dev builds only: lets screenshot scripts place the camera
     if (import.meta.env.DEV) {
       (window as unknown as { __movementController?: FirstPersonMovementController }).__movementController = movementController;
-      // Rearrange phase 0 proof (move furniture): console / script harness, never in a site build
-      if (searchParams.get('rearrange') === 'proof') {
-        void import('./layout/proof.js').then(({ mountRearrangeProof }) =>
-          mountRearrangeProof({
-            scene: renderer.scene,
-            getMesh: () => renderer.splatMesh,
-            getGrid: () => loadedGrid,
-            worldFromSplat: manifest.transform.world_from_splat,
-          })
-        );
-      }
     }
 
     // 6b. Tag Mode UI & POIs Loading (Round 2)
     let tagUI: TagUI | null = null;
     let placeTag: ((x: number, z: number) => void) | null = null;
+    /** Tag mode Adjust: Shift-click on the floor puts the selected tag there (true = click used) */
+    let floorClickPlace: ((e: MouseEvent) => boolean) | null = null;
+    /** The tag being dragged right now (its floor pin shows while dragging) */
+    let draggingPoi: POI | null = null;
     let activePois: POI[] = [];
     let manifestPois: POI[] = [];
 
@@ -699,10 +692,20 @@ async function bootstrap() {
     if (isTagMode) {
       // Tag mode is for editors only, so its code loads on demand instead of for every visitor
       const { TagUI } = await import('./ui/tag_ui.js');
+      // A tag may sit anywhere inside the room footprint, on or next to the floor map (walls,
+      // windows and furniture tops are fine), but never out in the void past the walls.
+      const TAG_FLOOR_REACH_M = 1.0;
+      const isValidTagSpot = (x: number, z: number): boolean => {
+        const b = manifest.bounds;
+        if (x < b.minX || x > b.maxX || z < b.minZ || z > b.maxZ) return false;
+        return planner ? planner.nearestFreeCell(x, z, TAG_FLOOR_REACH_M) >= 0 : true;
+      };
+
       tagUI = new TagUI({
         sceneId: manifest.scene_id,
         getPose: () => movementController!.pose,
         isWalkable: (x, z) => (planner ? planner.isWalkable(x, z) : true),
+        isInsideRoom: isValidTagSpot,
         onPoisChange: pois => {
           activePois = pois;
           navUI.setPois(activePois);
@@ -761,16 +764,8 @@ async function bootstrap() {
           navUI.showPoiCard(poi, getDistanceToPoi(poi));
         }
       };
-      // A tag may sit anywhere inside the room footprint, on or next to the floor map (walls,
-      // windows and furniture tops are fine), but never out in the void past the walls.
-      const TAG_FLOOR_REACH_M = 1.0;
-      const isValidTagSpot = (x: number, z: number): boolean => {
-        const b = manifest.bounds;
-        if (x < b.minX || x > b.maxX || z < b.minZ || z > b.maxZ) return false;
-        return planner ? planner.nearestFreeCell(x, z, TAG_FLOOR_REACH_M) >= 0 : true;
-      };
-
       minimap.onDragPoi((poi, x, z, done) => {
+        draggingPoi = done ? null : poi;
         // Off the map: the dot stays at its last good spot
         if (isValidTagSpot(x, z)) {
           poi.position.x = x;
@@ -806,6 +801,7 @@ async function bootstrap() {
           if (e.pointerId !== down.pointerId) return;
           if (!moved && Math.hypot(e.clientX - start.x, e.clientY - start.y) < 4) return;
           moved = true;
+          draggingPoi = poi;
           document.body.style.cursor = 'grabbing';
           const hit = pointOnPlane(e.clientX, e.clientY, labelY);
           if (!hit) return; // pointing above the label's height: hold the last good spot
@@ -822,6 +818,7 @@ async function bootstrap() {
           window.removeEventListener('pointerup', onUp);
           window.removeEventListener('pointercancel', onUp);
           document.body.style.cursor = '';
+          draggingPoi = null;
           if (!moved) {
             // A plain press still opens the card, as before
             routeView.suppressNextClick();
@@ -843,6 +840,26 @@ async function bootstrap() {
         window.addEventListener('pointercancel', onUp);
         return true;
       });
+
+      // Adjust mode: Shift-click the floor to stand the selected tag exactly there (the floor pin shows
+      // the spot). With the mouse locked it uses the middle of the screen, so you can aim at a tape cross.
+      // Dragging a label slides it at label height, which can't be lined up with a mark on the floor.
+      const FLOOR_PICK_MAX_M = 15;
+      floorClickPlace = (e: MouseEvent): boolean => {
+        if (!tagUI?.adjustMode || !e.shiftKey || tagUI.isFormOpen) return false;
+        const locked = document.pointerLockElement === canvas;
+        const rect = canvas.getBoundingClientRect();
+        const cx = locked ? rect.left + rect.width / 2 : e.clientX;
+        const cy = locked ? rect.top + rect.height / 2 : e.clientY;
+        const hit = pointOnPlane(cx, cy, 0);
+        const cam = camera.position;
+        if (!hit || hit.distanceTo(cam) > FLOOR_PICK_MAX_M) {
+          tagUI.showToast('Point at the floor to place the tag');
+          return true;
+        }
+        placeTag?.(hit.x, hit.z);
+        return true;
+      };
     }
 
     /** updatedAt: the live pois.json's updated_at (null when the scene has none yet) */
@@ -1000,7 +1017,8 @@ async function bootstrap() {
     }
 
     // Pointer Lock click-to-lock
-    canvas.addEventListener('click', () => {
+    canvas.addEventListener('click', (e: MouseEvent) => {
+      if (floorClickPlace?.(e)) return;
       if (tagUI?.isFormOpen || rearrangeOpen()) return;
       // Touch screens look by dragging (iOS has no pointer lock)
       if (touchControls || typeof canvas.requestPointerLock !== 'function') return;
@@ -1255,7 +1273,8 @@ async function bootstrap() {
       multiplayer?.update(dt);
       rearrange?.update();
 
-      // Update route ribbon animation and POI label overlays
+      // Update route ribbon animation and POI label overlays (Adjust mode: floor pin under the tag)
+      if (tagUI) routeView.setFloorPin(tagUI.adjustMode ? (draggingPoi ?? tagUI.selectedPoi) : null);
       routeView.update(camera, dt);
 
       // Update floor-plan minimap

@@ -1,5 +1,13 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { PoiDraftStore, makePoi, makePoiSet, validatePoiSet, POI_CATEGORIES } from '../../viewer/src/nav/pois.js';
+import {
+  PoiDraftStore,
+  makePoi,
+  makePoiSet,
+  validatePoiSet,
+  POI_CATEGORIES,
+  clonePoi,
+  rescueStranded,
+} from '../../viewer/src/nav/pois.js';
 import { isTypingTarget } from '../../viewer/src/ui/app_ui.js';
 
 describe('PoiDraftStore and Tag Mode Logic', () => {
@@ -102,5 +110,37 @@ describe('PoiDraftStore and Tag Mode Logic', () => {
     expect(isTypingTarget({ target: { tagName: 'select' } } as unknown as KeyboardEvent)).toBe(true);
     expect(isTypingTarget({ target: { tagName: 'textarea' } } as unknown as KeyboardEvent)).toBe(true);
     expect(isTypingTarget({ target: { tagName: 'div' } } as unknown as KeyboardEvent)).toBe(false);
+  });
+});
+
+describe('Tag editor copies and stranded tags', () => {
+  const sceneId = 'scn_testroomaa34';
+
+  it('clonePoi shares no position or approach with the original (dragging must not move the original)', () => {
+    const live = makePoi(sceneId, 'Desk', 1, 2);
+    live.approach = { x: 1.2, z: 2.2 };
+    const copy = clonePoi(live);
+    copy.position.x = 9;
+    copy.approach!.x = 9;
+    expect(live.position.x).toBe(1);
+    expect(live.approach.x).toBe(1.2);
+    expect(copy.poi_id).toBe(live.poi_id);
+  });
+
+  it('rescueStranded puts a draft tag outside the room back at its live spot', () => {
+    const inside = (x: number, z: number) => Math.abs(x) < 3 && Math.abs(z) < 2;
+    const live = [makePoi(sceneId, 'Desk', 1, 1), makePoi(sceneId, 'Door', -2, 0)];
+    const draft = live.map(clonePoi);
+    draft[0].position.x = 40; // flew off past the wall
+    draft[0].approach = { x: 39, z: 1 };
+    const extra = makePoi(sceneId, 'New', 50, 50); // no live copy: left alone
+    draft.push(extra);
+    const moved = rescueStranded(draft, live, inside);
+    expect(moved.map(p => p.name)).toEqual(['Desk']);
+    expect(draft[0].position).toEqual(live[0].position);
+    expect(draft[0].approach).toBeUndefined();
+    expect(draft[0].position).not.toBe(live[0].position);
+    expect(draft[1].position.x).toBe(-2);
+    expect(extra.position.x).toBe(50);
   });
 });

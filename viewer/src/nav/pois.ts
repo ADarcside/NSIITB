@@ -105,6 +105,35 @@ export function validatePoiSet(data: unknown): string[] {
   return errs;
 }
 
+/**
+ * A copy of a tag that shares no objects with the original. The tag editor keeps the live tags
+ * as its "original places"; a plain {...poi} copy shared position, so dragging a tag also moved
+ * its original and Clear draft could not put it back.
+ */
+export function clonePoi(poi: POI): POI {
+  const copy: POI = { ...poi, position: { ...poi.position } };
+  if (poi.approach) copy.approach = { ...poi.approach };
+  return copy;
+}
+
+/**
+ * Puts draft tags that sit outside the room (inside() false) back at their live spot, in place.
+ * Tags with no live copy, or whose live spot is outside too, are left alone. Returns the moved ones.
+ */
+export function rescueStranded(draft: POI[], live: POI[], inside: (x: number, z: number) => boolean): POI[] {
+  const moved: POI[] = [];
+  for (const poi of draft) {
+    if (inside(poi.position.x, poi.position.z)) continue;
+    const src = live.find(p => p.poi_id === poi.poi_id);
+    if (!src || !inside(src.position.x, src.position.z)) continue;
+    poi.position = { ...src.position };
+    if (src.approach) poi.approach = { ...src.approach };
+    else delete poi.approach;
+    moved.push(poi);
+  }
+  return moved;
+}
+
 /** Same places with the same content (order included), e.g. a draft that matches the live tags */
 export function samePois(a: POI[], b: POI[]): boolean {
   return JSON.stringify(a) === JSON.stringify(b);

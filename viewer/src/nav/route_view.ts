@@ -5,6 +5,8 @@
  * Under prefers-reduced-motion the ribbon appears at once and the ring and dashes stay still.
  * Walk game feel (setFeel(true)): the ribbon draws in faster, the chevrons flow faster, and
  * playArrival() pulses a ring outward on the floor when you reach the place.
+ * setFloorPin(poi) (tag mode Adjust) draws a ring on the floor under a tag and a thin stem up to its
+ * label, so a tag can be lined up with a real spot on the floor (the label itself floats about 1.2 m up).
  */
 
 import * as THREE from 'three';
@@ -146,6 +148,8 @@ export class RouteView {
   private _flowSpeed = 1.4;
   private _arrivalMesh: THREE.Mesh | null = null;
   private _arrivalT = 0;
+  private _floorPin: THREE.Group | null = null;
+  private _floorPinPoi: POI | null = null;
   private readonly _reduceMotion: MediaQueryList | null;
 
   constructor(scene: THREE.Scene, container?: HTMLElement) {
@@ -225,6 +229,83 @@ export class RouteView {
     this._arrivalMesh.geometry.dispose();
     (this._arrivalMesh.material as THREE.Material).dispose();
     this._arrivalMesh = null;
+  }
+
+  /**
+   * Tag mode Adjust: a ring on the floor (y = 0) right under the tag, and a stem up to its label.
+   * It follows poi.position every frame, so it moves along while the tag is dragged. null hides it.
+   */
+  setFloorPin(poi: POI | null): void {
+    this._floorPinPoi = poi;
+    if (!poi) {
+      if (this._floorPin) this._floorPin.visible = false;
+      return;
+    }
+    if (!this._floorPin) this._floorPin = this._buildFloorPin();
+    this._floorPin.visible = true;
+  }
+
+  /** Where the floor pin stands now (null when hidden); for tests */
+  get floorPinAt(): { x: number; z: number } | null {
+    if (!this._floorPin?.visible || !this._floorPinPoi) return null;
+    return { x: this._floorPin.position.x, z: this._floorPin.position.z };
+  }
+
+  private _buildFloorPin(): THREE.Group {
+    const group = new THREE.Group();
+    group.name = 'tag-floor-pin';
+    const mat = (opacity: number) =>
+      new THREE.MeshBasicMaterial({
+        color: THEME.gold,
+        transparent: true,
+        opacity,
+        depthTest: false,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      });
+    // Ring with a small dot in the middle: the dot is the exact spot
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.12, 0.16, 40), mat(0.95));
+    ring.rotation.x = -Math.PI / 2;
+    const dot = new THREE.Mesh(new THREE.CircleGeometry(0.025, 16), mat(0.95));
+    dot.rotation.x = -Math.PI / 2;
+    // Unit-tall stem, scaled to the label height each frame
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 1, 6), mat(0.7));
+    stem.name = 'stem';
+    for (const m of [ring, dot, stem]) {
+      m.renderOrder = 12;
+      group.add(m);
+    }
+    group.position.y = 0.01;
+    group.visible = false;
+    this._scene.add(group);
+    return group;
+  }
+
+  private _syncFloorPin(): void {
+    const pin = this._floorPin;
+    const poi = this._floorPinPoi;
+    if (!pin || !poi || !pin.visible) return;
+    pin.position.x = poi.position.x;
+    pin.position.z = poi.position.z;
+    const top = Math.max(0.05, (poi.position.y ?? 1.2) - 0.01);
+    const stem = pin.getObjectByName('stem');
+    if (stem) {
+      stem.scale.y = top;
+      stem.position.y = top / 2;
+    }
+  }
+
+  private _disposeFloorPin(): void {
+    if (!this._floorPin) return;
+    this._scene.remove(this._floorPin);
+    this._floorPin.traverse(o => {
+      if (o instanceof THREE.Mesh) {
+        o.geometry.dispose();
+        (o.material as THREE.Material).dispose();
+      }
+    });
+    this._floorPin = null;
+    this._floorPinPoi = null;
   }
 
   /** Hides every place label except the current destination (the Tags button) */
@@ -448,6 +529,8 @@ export class RouteView {
       (this._ringMesh.material as THREE.MeshBasicMaterial).opacity = 0.6 + 0.35 * pulse;
     }
 
+    this._syncFloorPin();
+
     // Project and position POI labels
     const w = window.innerWidth;
     const h = window.innerHeight;
@@ -523,6 +606,7 @@ export class RouteView {
     window.removeEventListener('resize', this._onResize);
     this.setPath(null);
     this._clearArrival();
+    this._disposeFloorPin();
     this._ribbonMat.dispose();
     this._texture.dispose();
     this._labelContainer.remove();

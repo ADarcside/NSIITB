@@ -13,6 +13,7 @@
 
 import type { MoveMode } from './movement.js';
 import { ensureTokens } from '../ui/tokens.js';
+import TOUCH_CSS from './touch_controls.css?raw';
 
 export interface TouchMovementTarget {
   setAnalog(forward: number, right: number, sprint?: boolean): void;
@@ -64,6 +65,8 @@ export class TouchControls {
     this._root = document.createElement('div');
     this._root.id = 'touch-controls';
     this._root.className = 'touch-controls ns-ui';
+    // Stick size comes from STICK_RADIUS, which the drag maths also uses
+    this._root.style.setProperty('--tc-stick-d', `${STICK_RADIUS * 2}px`);
 
     // Joystick
     this._stick = document.createElement('div');
@@ -258,92 +261,6 @@ function injectStyles(): void {
   stylesInjected = true;
   const style = document.createElement('style');
   style.id = 'namma-touch-style';
-  style.textContent = `
-    .touch-controls {
-      position: absolute;
-      left: var(--ns-hud-left);
-      right: var(--ns-hud-right);
-      bottom: calc(var(--ns-hud-bottom) + var(--ns-sheet-h, 0px) + var(--ns-nav-stack-h, 0px) + 8px);
-      z-index: 85;
-      display: flex;
-      align-items: flex-end;
-      justify-content: space-between;
-      pointer-events: none;
-      transition: bottom var(--ns-dur) var(--ns-ease-out);
-    }
-    html.ns-search-open .touch-controls, html.ns-help-open .touch-controls, html.ns-rr-open .touch-controls { display: none; }
-    .touch-controls.tc-tucked { opacity: 0; visibility: hidden; transition: opacity var(--ns-dur-fast) ease, visibility 0s linear var(--ns-dur-fast); }
-    .tc-stick {
-      position: relative;
-      flex: none;
-      width: ${STICK_RADIUS * 2}px;
-      height: ${STICK_RADIUS * 2}px;
-      border-radius: 50%;
-      background: rgba(10, 10, 12, 0.38);
-      border: 1.5px solid rgba(255, 255, 255, 0.28);
-      backdrop-filter: blur(6px);
-      -webkit-backdrop-filter: blur(6px);
-      pointer-events: auto;
-      touch-action: none;
-      -webkit-touch-callout: none;
-      transition: border-color var(--ns-dur-fast) ease, box-shadow var(--ns-dur-fast) ease;
-    }
-    .tc-stick.active { border-color: var(--ns-accent); }
-    .tc-stick.running { box-shadow: 0 0 0 4px var(--ns-accent-ring), 0 0 18px var(--ns-accent-ring); }
-    .tc-knob {
-      position: absolute;
-      left: 50%;
-      top: 50%;
-      width: 44px;
-      height: 44px;
-      border-radius: 50%;
-      transform: translate(-50%, -50%);
-      background: rgba(255, 255, 255, 0.86);
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
-      pointer-events: none;
-    }
-    .tc-stick.active .tc-knob { background: var(--ns-accent); }
-    .tc-arrow {
-      position: absolute;
-      width: 0;
-      height: 0;
-      border: 6px solid transparent;
-      opacity: 0.7;
-    }
-    .tc-up { top: 7px; left: 50%; margin-left: -6px; border-bottom-color: #fff; border-top-width: 0; }
-    .tc-down { bottom: 7px; left: 50%; margin-left: -6px; border-top-color: #fff; border-bottom-width: 0; }
-    .tc-left { left: 7px; top: 50%; margin-top: -6px; border-right-color: #fff; border-left-width: 0; }
-    .tc-right { right: 7px; top: 50%; margin-top: -6px; border-left-color: #fff; border-right-width: 0; }
-    .tc-right-col { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
-    .tc-buttons { display: flex; flex-direction: column; gap: 10px; }
-    .tc-buttons.hidden, .tc-jump.hidden { display: none; }
-    .tc-btn {
-      width: 46px;
-      height: 46px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 50%;
-      border: 1.5px solid rgba(255, 255, 255, 0.28);
-      background: rgba(10, 10, 12, 0.45);
-      backdrop-filter: blur(6px);
-      -webkit-backdrop-filter: blur(6px);
-      color: #fff;
-      pointer-events: auto;
-      touch-action: none;
-      -webkit-touch-callout: none;
-      -webkit-tap-highlight-color: transparent;
-    }
-    .tc-btn.active { background: var(--ns-accent); color: #0a0a0c; border-color: var(--ns-accent); }
-    /* Short landscape phones: smaller pads so the view stays open */
-    @media (pointer: coarse) and (max-height: 520px) {
-      .touch-controls { bottom: calc(var(--ns-hud-bottom) + 4px); }
-      /* Up / Down side by side, so they stay under the minimap */
-      .tc-buttons { flex-direction: row; }
-      /* Tag mode: the Places column takes the right edge, so the pads sit just left of it */
-      html:has(.tag-panel) .touch-controls { right: calc(var(--ns-hud-right) + var(--ns-tag-w) + 8px); }
-      html:has(.tag-panel) { --ns-pads-w: 110px; }
-    }
-  `;
+  style.textContent = TOUCH_CSS;
   document.head.appendChild(style);
 }

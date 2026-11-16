@@ -28,6 +28,7 @@ from pipeline import normalize as nz
 from pipeline import grid as navgrid
 from pipeline.stages.s03_poses import parse_cameras_txt, parse_images_txt, parse_points3D_txt
 from pipeline.stages.s05_export import read_ply_gaussians_numpy
+from pipeline.stages.s07_compress import write_ply_subset
 
 # Typical chest-height hold for the capture SOP; only used when no tape pair or override exists.
 CAMERA_HEIGHT_PRIOR_M = 1.35
@@ -53,23 +54,6 @@ def find_dataparser_transforms(run_dir: Path) -> Path:
     if not found:
         raise FileNotFoundError(f"No Nerfstudio dataparser_transforms.json under {run_dir}")
     return found[-1]
-
-
-def write_ply_subset(src_ply: Path, dst_ply: Path, data: np.ndarray, keep: np.ndarray) -> None:
-    """Copies the PLY header with a new vertex count and writes the kept rows unchanged."""
-    raw = src_ply.read_bytes()
-    end = raw.index(b"end_header") + len(b"end_header")
-    end = raw.index(b"\n", end) + 1
-    header_lines = raw[:end].decode("ascii").splitlines(keepends=True)
-    kept = np.ascontiguousarray(data[keep]).astype("<f4")
-    out_lines = []
-    for line in header_lines:
-        if line.startswith("element vertex"):
-            line = f"element vertex {kept.shape[0]}\n"
-        out_lines.append(line)
-    with open(dst_ply, "wb") as f:
-        f.write("".join(out_lines).encode("ascii"))
-        f.write(kept.tobytes())
 
 
 def metrics_scale_is_approx(scale_method: str) -> bool:

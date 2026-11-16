@@ -11,6 +11,8 @@
  * tests check this against three.js itself.
  */
 
+import { wrapAngle } from '../net/interp.js';
+
 export interface Vec3 {
   x: number;
   y: number;
@@ -106,12 +108,6 @@ export function arToScene(al: Alignment, p: Vec3, out: Vec3 = { x: 0, y: 0, z: 0
   return out;
 }
 
-export function wrapAngle(a: number): number {
-  let r = a % (2 * Math.PI);
-  if (r > Math.PI) r -= 2 * Math.PI;
-  if (r <= -Math.PI) r += 2 * Math.PI;
-  return r;
-}
 
 /** How long the ring must stay still on a cross before a tap counts (ms) */
 export const TAP_STEADY_MS = 300;

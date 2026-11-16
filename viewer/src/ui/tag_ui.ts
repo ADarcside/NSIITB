@@ -20,6 +20,8 @@ import {
   downloadPoiSet,
   approachFor,
   samePois,
+  clonePoi,
+  rescueStranded,
 } from '../nav/pois.js';
 import { savePoisLive, tokenStore, SaveError, type SaveConfig } from '../nav/publish.js';
 import { ensureTokens, icon, trapTab } from './tokens.js';
@@ -31,9 +33,11 @@ export interface TagUIOptions {
   container?: HTMLElement;
   getPose: () => Pose3D;
   isWalkable?: (x: number, z: number) => boolean;
+  /** Inside the room (not out past the walls): a draft tag outside it goes back to its live spot */
+  isInsideRoom?: (x: number, z: number) => boolean;
   onPoisChange: (pois: POI[]) => void;
   manifestPois?: POI[];
-  /** Called when the Adjust switch flips (main.ts stops pointer lock while it is on) */
+  /** Called when the Adjust switch flips (main.ts shows the floor pin and map drag while it is on) */
   onAdjustChange?: (on: boolean) => void;
   /** Where Save to live commits the places; no Save button when absent */
   saveConfig?: SaveConfig | null;
@@ -53,6 +57,7 @@ export class TagUI {
   private readonly _root: HTMLElement;
   private readonly _getPose: () => Pose3D;
   private readonly _isWalkable?: (x: number, z: number) => boolean;
+  private readonly _isInsideRoom?: (x: number, z: number) => boolean;
   private readonly _onPoisChange: (pois: POI[]) => void;
   private readonly _draftStore: PoiDraftStore;
 
@@ -110,10 +115,11 @@ export class TagUI {
     this._sceneId = options.sceneId;
     this._getPose = options.getPose;
     this._isWalkable = options.isWalkable;
+    this._isInsideRoom = options.isInsideRoom;
     this._onPoisChange = options.onPoisChange;
     this._onAdjustChange = options.onAdjustChange;
     this._draftStore = new PoiDraftStore(this._sceneId);
-    this._manifestPois = options.manifestPois ? [...options.manifestPois] : [];
+    this._manifestPois = options.manifestPois ? options.manifestPois.map(clonePoi) : [];
     this._phoneQuery = window.matchMedia ? window.matchMedia(NARROW_QUERY) : null;
     this._saveConfig = options.saveConfig ?? null;
 
@@ -228,7 +234,7 @@ export class TagUI {
       }).then(ok => {
         if (!ok) return;
         this._draftStore.clear();
-        this._pois = this._manifestPois.map(p => ({ ...p }));
+        this._pois = this._manifestPois.map(clonePoi);
         this._draftStore.save(this._pois);
         this._onPoisChange(this._pois);
         this._renderList();
@@ -677,6 +683,7 @@ export class TagUI {
    */
   async reconcileDraft(livePois: POI[], liveBase: string | null, draftBase: string | null | undefined): Promise<void> {
     this.setManifestPois(livePois, liveBase);
+    this._rescueStranded();
     const fromThisLive = draftBase !== undefined && draftBase === liveBase;
     if (fromThisLive || livePois.length === 0 || samePois(this._pois, livePois)) {
       this._draftStore.save(this._pois);
@@ -689,7 +696,7 @@ export class TagUI {
       cancelLabel: 'Keep my draft',
     });
     if (useLive) {
-      this._pois = livePois.map(p => ({ ...p, position: { ...p.position }, ...(p.approach ? { approach: { ...p.approach } } : {}) }));
+      this._pois = livePois.map(clonePoi);
       this._onPoisChange(this._pois);
       this._renderList();
       this.showToast(`Loaded the live tags (${l} places)`);
@@ -697,6 +704,20 @@ export class TagUI {
       this.showToast('Kept your draft. Save to live will replace the live tags.', 5000);
     }
     this._draftStore.save(this._pois);
+  }
+
+  /**
+   * A draft tag left out past the walls (saved by an older build, or the room changed) goes back to
+   * its live spot, so it can be seen and dragged again. Tags with no live spot stay where they are.
+   */
+  private _rescueStranded(): void {
+    if (!this._isInsideRoom) return;
+    const rescued = rescueStranded(this._pois, this._manifestPois, this._isInsideRoom);
+    if (rescued.length === 0) return;
+    this._draftStore.save(this._pois);
+    this._onPoisChange(this._pois);
+    this._renderList();
+    this.showToast(`Back inside the room: ${rescued.map(p => p.name).join(', ')}`, 5000);
   }
 
   private _setSaving(on: boolean): void {
@@ -736,7 +757,7 @@ export class TagUI {
 
   /** The live tags (and the updated_at of their pois.json, when known) that Clear draft and Save compare against */
   setManifestPois(pois: POI[], updatedAt?: string | null): void {
-    this._manifestPois = pois.map(p => ({ ...p }));
+    this._manifestPois = pois.map(clonePoi);
     if (updatedAt !== undefined) {
       this._liveBase = updatedAt;
       this._draftStore.base = updatedAt;
@@ -933,7 +954,8 @@ export class TagUI {
   private _renderList(): void {
     this._countBadge.textContent = `(${this._pois.length})`;
     this._adjustHint.classList.toggle('hidden', !this._adjust);
-    this._adjustHint.textContent = 'Drag a tag label in the view, or its dot on the map, to move it.';
+    this._adjustHint.textContent =
+      'Drag a tag label in the view, or its dot on the map, to move it. Shift-click the floor to stand the picked tag on that exact spot (the ring shows where).';
     this._poiListContainer.innerHTML = '';
 
     if (this._pois.length === 0) {

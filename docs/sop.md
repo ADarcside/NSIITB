@@ -201,7 +201,7 @@ The AR guide is a bonus on top of the 3D room. Skip this section if there is no 
 **After the room is published (about 10 min):**
 1. Stick two tape crosses on open floor about 2 m apart, near where visitors start, away from mirrors and shiny floor.
 2. Measure the distance between the crosses and write it down.
-3. Open the site with `?tag=1`. Stand on each cross in the 3D room and add a tag named `Mark 1A`, then `Mark 1B`. Check that the distance between them in the 3D room matches the tape within about 5 cm. If it doesn't, move the tags.
+3. Open the site with `?tag=1`. Add a tag named `Mark 1A`, then `Mark 1B`. To put each one exactly on its cross: turn on Adjust mode (T), pick the tag in the list, and Shift-click the cross on the floor (with the mouse locked, aim the middle of the screen at it). A gold ring on the floor shows where the tag stands. Check that the distance between them in the 3D room matches the tape within about 5 cm. If it doesn't, Shift-click again.
 4. Save the tags to the site. Mark tags never show to visitors.
 5. Build the site with AR switched on: `VITE_AR=1 scripts/build_site.sh <run>/publish/<scene_id> site`, then publish it as usual.
 6. Open `ar.html?qr=1` on the laptop and print the sheet. Stick the codes near the door, or keep the sheet in hand for the demo.

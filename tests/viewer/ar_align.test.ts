@@ -12,9 +12,9 @@ import {
   flipAlignment,
   sceneToAr,
   solveAlignment,
-  wrapAngle,
   type Vec3,
 } from '../../viewer/src/ar/align.js';
+import { wrapAngle } from '../../viewer/src/net/interp.js';
 
 /** Scene -> AR with a three.js group (rotation.y = theta, position = t), like sceneRoot in AR */
 function viaThree(theta: number, t: Vec3, p: Vec3): Vec3 {

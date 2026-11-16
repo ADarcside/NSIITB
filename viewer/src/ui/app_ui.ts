@@ -15,7 +15,7 @@
 
 import type { AppUI, ViewerErrorCode } from '../types.js';
 import { ensureTokens, icon } from './tokens.js';
-import { isPhoneTouch, isTouchDevice } from './device.js';
+import { isPhone, isPhoneTouch, isTouchDevice } from './device.js';
 import APP_UI_CSS from './app_ui.css?raw';
 
 /**
@@ -510,7 +510,7 @@ export class VanillaAppUI implements AppUI {
   private _fitHudRow(row: HTMLElement): void {
     const fit = () => {
       row.classList.remove('hud-tight', 'hud-tighter');
-      if (window.innerWidth <= 760 || window.matchMedia('(pointer: coarse) and (max-height: 520px)').matches) return;
+      if (isPhone()) return;
       const search = document.querySelector('.nav-search-container');
       const limit = (search?.getBoundingClientRect().right ?? 0) + 8;
       if (row.getBoundingClientRect().left >= limit) return;

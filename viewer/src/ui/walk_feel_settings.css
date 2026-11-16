@@ -1,0 +1,39 @@
+    .feel-settings {
+      border-top: 1px solid var(--ns-border);
+      padding-top: var(--ns-space-4);
+      margin-bottom: 20px;
+      display: grid;
+      gap: var(--ns-space-2);
+    }
+    .feel-settings h3 {
+      margin: 0 0 var(--ns-space-1) 0;
+      font-size: var(--ns-fs-md);
+      font-weight: 700;
+      color: var(--ns-accent);
+      letter-spacing: var(--ns-heading-ls);
+    }
+    .feel-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: var(--ns-space-4);
+      font-size: var(--ns-fs-md);
+      color: var(--ns-text-muted);
+      cursor: pointer;
+    }
+    .feel-row output { color: var(--ns-text); margin-left: 6px; font-variant-numeric: tabular-nums; }
+    .feel-row input[type='range'] { width: 160px; accent-color: var(--ns-accent); }
+    .feel-row input[type='checkbox'] { width: 18px; height: 18px; accent-color: var(--ns-accent); }
+    .feel-reset {
+      justify-self: start;
+      background: none;
+      border: none;
+      padding: 0;
+      font: inherit;
+      font-size: var(--ns-fs-sm);
+      color: var(--ns-text-muted);
+      text-decoration: underline;
+      cursor: pointer;
+    }
+    .feel-reset:hover, .feel-reset:focus-visible { color: var(--ns-accent); }
+  
