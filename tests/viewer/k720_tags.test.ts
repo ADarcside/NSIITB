@@ -7,6 +7,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { validatePoiSet, POI_CATEGORIES } from '../../viewer/src/nav/pois.js';
 import { searchPois } from '../../viewer/src/nav/search.js';
+import { isFloorMark } from '../../viewer/src/ar/marks.js';
 import type { PoiSet } from '../../viewer/src/contracts/types.js';
 
 const set = JSON.parse(readFileSync(fileURLToPath(new URL('../../sample/test-capture/pois.json', import.meta.url)), 'utf8')) as PoiSet;
@@ -17,7 +18,8 @@ describe('K-720 tags', () => {
     expect(validatePoiSet(set)).toEqual([]);
     for (const p of set.pois) {
       expect(POI_CATEGORIES).toContain(p.category);
-      expect(p.aliases?.length ?? 0).toBeGreaterThanOrEqual(2);
+      // AR floor marks ("Mark 1A"...) are hidden from visitors, so they need no search aliases
+      if (!isFloorMark(p)) expect(p.aliases?.length ?? 0, p.name).toBeGreaterThanOrEqual(2);
     }
   });
 

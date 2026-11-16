@@ -48,8 +48,12 @@ describe('AR floor marks', () => {
     expect(visible.map(p => p.name)).toEqual(['Bunk 1']);
     expect(searchPois(visible, 'mark').length).toBe(0);
     // No marks: the same array comes back untouched
-    const k = (k720 as { pois: POI[] }).pois;
-    expect(visiblePlaces(k)).toBe(k);
+    const plain = [tag('Bunk 1', 1, 1, 'sleep'), tag('Window', 2, 2, 'utility')];
+    expect(visiblePlaces(plain)).toBe(plain);
+    // The real K-720 tags (with or without saved marks): no mark ever reaches visitors
+    const k = visiblePlaces((k720 as { pois: POI[] }).pois);
+    expect(k.some(isFloorMark)).toBe(false);
+    expect(k.length).toBeGreaterThanOrEqual(10);
   });
 
   it('reads test marks from a link', () => {
