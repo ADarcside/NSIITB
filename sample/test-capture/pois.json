@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "scene_id": "scn_hostelroomac",
-  "updated_at": "2026-11-16T19:12:58Z",
+  "updated_at": "2026-11-16T19:24:21Z",
   "pois": [
     {
       "schema_version": 1,
@@ -293,7 +293,7 @@
       "schema_version": 1,
       "poi_id": "poi_i2ch4u5rdokm",
       "scene_id": "scn_hostelroomac",
-      "name": "MARK 1A",
+      "name": "Mark 1A",
       "category": "other",
       "aliases": [
         "TEST"
@@ -309,7 +309,7 @@
       "schema_version": 1,
       "poi_id": "poi_hnpxmcyu3wdy",
       "scene_id": "scn_hostelroomac",
-      "name": "MARK 1B",
+      "name": "Mark 1B",
       "category": "other",
       "aliases": [
         "TEST"
