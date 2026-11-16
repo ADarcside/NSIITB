@@ -27,8 +27,9 @@ import { NavPlanner, type Point2 } from './nav/astar.js';
 import { validatePoiSet, PoiDraftStore, poiGoal } from './nav/pois.js';
 import { saveConfigFromEnv, saveLayoutLive, SaveError } from './nav/publish.js';
 import { shareUrl, resolvePoiRef } from './nav/share.js';
-import { activeRoute, arGuideLoader } from './nav/active_route.js';
+import { activeRoute, arGuideLoader, registerArGuide } from './nav/active_route.js';
 import { loadVoiceOn, saveVoiceOn, primeSpeechOnFirstGesture } from './nav/voice_pref.js';
+import { visiblePlaces } from './ar/marks.js';
 import type { TagUI } from './ui/tag_ui.js';
 import { loadFeelSettings, mountFeelSettings } from './ui/walk_feel_settings.js';
 import {
@@ -43,6 +44,9 @@ import { parseLayout, type PublishedLayout } from './layout/layout_file.js';
 import { ViewerError } from './types.js';
 import { preventPageZoom, resetPageZoom } from './ui/no_page_zoom.js';
 import type { NavGrid, POI } from './contracts/types.js';
+
+// AR guide (VITE_AR=1 builds only): the route card's AR button opens ar.html; loaded on demand
+if (import.meta.env.VITE_AR === '1') registerArGuide(() => import('./ar/ar_entry.js').then(m => m.arGuide));
 
 async function bootstrap() {
   const canvas = document.getElementById('viewer-canvas') as HTMLCanvasElement;
@@ -865,7 +869,8 @@ async function bootstrap() {
         else tagUI.setManifestPois(manifestPois, updatedAt);
       }
       if (!isTagMode || initialDraft === null) {
-        activePois = poiList;
+        // AR floor marks ("Mark 1A"...) are for the AR page only; tag mode still shows them to edit
+        activePois = isTagMode ? poiList : visiblePlaces(poiList);
         navUI.setPois(activePois);
         routeView.setPois(activePois);
         if (tagUI) {

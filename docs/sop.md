@@ -1,4 +1,4 @@
-# Capture SOP (v1.4)
+# Capture SOP (v1.5)
 
 This is how one person with one phone captures an indoor space so the pipeline can turn it into a walkable 3D scene. It is written to be repeated on an unseen venue under time pressure, so every step is short and has a reason.
 
@@ -192,12 +192,35 @@ Every stage has a measured pass/fail gate. A failed gate means reshoot or reproc
 
 - Reshoot (room_v2, 28 Oct): floor passes aimed straight down caught the operator's feet and shadow, which became dark blobs above the floor. The ceiling corner above the cupboards by the door, the shiny AC vent and the curtain stayed soft. v1.3 aims floor passes 1 m ahead and adds a trouble-spot pass.
 
+## 10. AR guide at a venue
+
+The AR guide is a bonus on top of the 3D room. Skip this section if there is no time.
+
+**Needs:** an Android phone on Google's ARCore list (tested: Realme Narzo), Chrome, Google Play Services for AR updated the day before, a full battery, two strips of masking tape and the tape measure.
+
+**After the room is published (about 10 min):**
+1. Stick two tape crosses on open floor about 2 m apart, near where visitors start, away from mirrors and shiny floor.
+2. Measure the distance between the crosses and write it down.
+3. Open the site with `?tag=1`. Stand on each cross in the 3D room and add a tag named `Mark 1A`, then `Mark 1B`. Check that the distance between them in the 3D room matches the tape within about 5 cm. If it doesn't, move the tags.
+4. Save the tags to the site. Mark tags never show to visitors.
+5. Build the site with AR switched on: `VITE_AR=1 scripts/build_site.sh <run>/publish/<scene_id> site`, then publish it as usual.
+6. Open `ar.html?qr=1` on the laptop and print the sheet. Stick the codes near the door, or keep the sheet in hand for the demo.
+
+**On the phone (about 3 min):**
+1. Open the site online once and start AR, so the page is stored for offline use.
+2. Pick a place, tap **AR** on the route card, tap **Start AR**, and move the phone slowly over the floor until the gold ring sits on it.
+3. Tap cross 1A, then cross 1B, then check that the pins sit on their real objects and tap **Yes**. If everything is turned around, tap **Flip**.
+4. Follow the arrows. If the pins drift, tap **Re-align** and tap the two crosses again. The route to the same place carries on.
+
+**Good light and slow movement matter most.** If the phone loses tracking for more than a second, the pins hide and a message asks you to point at the floor and furniture. Record one good run on the phone as soon as it works at the venue, as a backup in case tracking fails in front of the judges.
+
 ## Version history
 
 | Version | Date | Change |
 |---|---|---|
 | v1.0.0 | 24 Oct 2026 | First SOP, from the Round 1 master guide |
 | v1.4.0 | 15 Nov 2026 | Film the floor and wall behind movable furniture; check furniture boxes in tag mode after publishing |
+| v1.5.0 | 15 Nov 2026 | New section 10: setting up the AR guide at a venue (marks, build, QR sheet, phone steps) |
 | v1.3.0 | 29 Oct 2026 | Floor passes aimed 1 m ahead (operator out of shot), trouble-spot pass (high corners, shiny vents, curtains), close windows, lessons from the room_v2 reshoot |
 | v1.2.0 | 27 Oct 2026 | Full 30 to 35 min plan for K-720 (4 passes per surface, 0.2 m/s); 12 to 15 min plan kept as the quick plan |
 | v1.1.0 | 27 Oct 2026 | Distance, pass count and method for each part of the room; added ceiling pass and "looking across" laps, made room measurements required (scale source), tape pairs become backup and check, timings and lessons from the K-720 capture |

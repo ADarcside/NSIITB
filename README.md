@@ -74,6 +74,15 @@ scripts/build_site.sh <scene_dir> site
 - **Play with friends**: the gold button in the top bar opens multiplayer after a short warning (your mic turns on in a room, and anyone with the invite link can join). Pick a cartoon character, create a room, and send the invite link. Up to 2 to 6 people (it depends on the room's walkable floor area) walk the same scene, see each other move, and talk by voice. **Go** next to a friend's name draws the Round 2 path to them, and **G** points at a spot for everyone. **Leave** goes back to exploring alone. Reset and the collision mode sit in the **…** menu.
 - The relay is a small Cloudflare Worker that passes messages between the people in a room and stores nothing. Voice goes browser to browser. The multiplayer code only downloads after you press Continue. Setup, local testing and the build switches (`VITE_MP_URL`, and `VITE_MP_BUTTON=0` to hide the button) are in [multiplayer/README.md](multiplayer/README.md).
 
+### Extra: AR guide on the phone (Round 3 bonus)
+
+An Android phone with Chrome and ARCore can follow a route through its camera: gold arrows on the floor, a floating pin over the place, an arrow at the screen edge when the target is out of view, a buzz and a spoken line on arrival, and English or Hindi hints. On the live site, open a place, tap **Navigate**, close the place card and tap **AR** on the route card. The button shows only on phones that support WebXR AR.
+
+- **Alignment:** two tape crosses on the floor about 2 m apart, tagged in tag mode as `Mark 1A` and `Mark 1B`. In AR you tap the two crosses. Marks never show to visitors.
+- **Ways in:** the **AR** button, a direct link `ar.html?to=<place id>`, or the printable QR sheet at [`ar.html?qr=1`](https://adarcside.github.io/namma-space/round2/ar.html?qr=1).
+- **Offline:** after one visit online, the AR page and the room's small files are kept on the phone, so a route still works in flight mode. The offline copy covers only `ar.html`, never the 3D viewer.
+- **Build:** `VITE_AR=1 scripts/build_site.sh <scene_dir> site`. Without `VITE_AR=1` there is no AR button and no AR code. Setting it up at a venue is in [docs/sop.md](docs/sop.md#10-ar-guide-at-a-venue), and the code is in [viewer/src/ar/](viewer/src/ar/).
+
 How the spatial index, search and pathfinding work is in [docs/round2.md](docs/round2.md). The data format is in [pipeline/schemas/pois.schema.json](pipeline/schemas/pois.schema.json), the pathfinder in [viewer/src/nav/astar.ts](viewer/src/nav/astar.ts), and search in [viewer/src/nav/search.ts](viewer/src/nav/search.ts).
 
 ## How a room becomes a link

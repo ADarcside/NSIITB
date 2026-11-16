@@ -1,0 +1,215 @@
+/* Namma Space AR: flat overlay on the camera view (and the Ready / Unsupported screens before it).
+   #ar-hud is the WebXR DOM overlay root, so it must stay transparent: the camera shows through. */
+#ar-hud {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  background: transparent;
+  color: var(--ns-text);
+  font-family: var(--ns-font);
+  pointer-events: none;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+    max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+}
+#ar-hud [hidden] {
+  display: none !important;
+}
+#ar-hud button {
+  pointer-events: auto;
+  font: inherit;
+  cursor: pointer;
+  border: 0;
+  min-height: 48px;
+  border-radius: var(--ns-radius-sm);
+  -webkit-tap-highlight-color: transparent;
+}
+#ar-hud button:focus-visible {
+  outline: 2px solid var(--ns-focus);
+  outline-offset: 2px;
+}
+
+/* Before the camera: one centred card */
+.ar-panel {
+  pointer-events: auto;
+  margin: auto 0;
+  width: min(420px, 100%);
+  background: var(--ns-surface-strong);
+  border: 1px solid var(--ns-border);
+  border-radius: var(--ns-radius-lg);
+  box-shadow: var(--ns-shadow);
+  padding: var(--ns-space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--ns-space-3);
+}
+.ar-kicker {
+  color: var(--ns-accent);
+  font-size: var(--ns-fs-sm);
+  letter-spacing: var(--ns-label-ls);
+  text-transform: uppercase;
+  font-weight: 600;
+}
+.ar-title {
+  font-size: 22px;
+  line-height: 1.25;
+  font-weight: 700;
+}
+.ar-line {
+  color: var(--ns-text-muted);
+  font-size: var(--ns-fs-lg);
+  line-height: 1.45;
+}
+.ar-error {
+  color: var(--ns-error-text);
+  background: var(--ns-error-bg);
+  border: 1px solid var(--ns-danger-border);
+  border-radius: var(--ns-radius-sm);
+  padding: var(--ns-space-2) var(--ns-space-3);
+  font-size: var(--ns-fs-lg);
+  line-height: 1.4;
+}
+.ar-safety {
+  color: var(--ns-text-subtle);
+  font-size: var(--ns-fs-md);
+  line-height: 1.4;
+}
+.ar-primary {
+  background: var(--ns-primary);
+  color: var(--ns-on-accent);
+  font-weight: 700;
+  font-size: 17px;
+  letter-spacing: 0.02em;
+  box-shadow: var(--ns-glow);
+}
+.ar-primary:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+.ar-row {
+  display: flex;
+  gap: var(--ns-space-2);
+}
+.ar-row > button {
+  flex: 1;
+}
+.ar-secondary {
+  background: var(--ns-surface-hover);
+  color: var(--ns-text);
+  border: 1px solid var(--ns-border-strong) !important;
+  padding: 0 var(--ns-space-4);
+}
+
+/* In the camera view: message card at the top, button bar at the bottom */
+.ar-top {
+  width: min(520px, 100%);
+  background: var(--ns-surface);
+  border: 1px solid var(--ns-border);
+  border-radius: var(--ns-radius-lg);
+  padding: var(--ns-space-3) var(--ns-space-4);
+  text-align: center;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+.ar-message {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.ar-detail {
+  white-space: pre-line;
+  margin-top: var(--ns-space-1);
+  color: var(--ns-text-muted);
+  font-size: var(--ns-fs-lg);
+  line-height: 1.4;
+}
+.ar-note {
+  margin-top: var(--ns-space-1);
+  color: var(--ns-accent);
+  font-size: var(--ns-fs-md);
+  line-height: 1.4;
+}
+.ar-bottom-wrap {
+  width: min(520px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--ns-space-2);
+}
+.ar-actions {
+  display: flex;
+  gap: var(--ns-space-2);
+}
+.ar-actions > button {
+  flex: 1;
+}
+.ar-bottom {
+  width: min(520px, 100%);
+  display: flex;
+  gap: var(--ns-space-2);
+  justify-content: flex-end;
+}
+.ar-bottom .ar-exit {
+  background: var(--ns-danger);
+  color: var(--ns-on-fill);
+  font-weight: 700;
+  padding: 0 var(--ns-space-5);
+}
+
+/* Edge arrow: points toward the way to go when it is out of the camera view (phase 4) */
+.ar-edge {
+  position: absolute;
+  width: 0;
+  height: 0;
+  border-top: 18px solid transparent;
+  border-bottom: 18px solid transparent;
+  border-left: 30px solid var(--ns-accent);
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.7));
+  pointer-events: none;
+}
+
+/* Place picker over the camera view (phase 4) */
+.ar-picker {
+  pointer-events: auto;
+  position: absolute;
+  left: 50%;
+  top: max(16px, env(safe-area-inset-top));
+  transform: translateX(-50%);
+  width: min(420px, calc(100% - 32px));
+  max-height: calc(100% - 32px);
+  background: var(--ns-surface-strong);
+  border: 1px solid var(--ns-border);
+  border-radius: var(--ns-radius-lg);
+  box-shadow: var(--ns-shadow);
+  padding: var(--ns-space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--ns-space-3);
+}
+.ar-picker-input {
+  font: inherit;
+  font-size: 16px;
+  min-height: 48px;
+  padding: 0 var(--ns-space-3);
+  color: var(--ns-text);
+  background: var(--ns-surface-hover);
+  border: 1px solid var(--ns-border-strong);
+  border-radius: var(--ns-radius-sm);
+  user-select: text;
+  -webkit-user-select: text;
+}
+.ar-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ns-space-1);
+  overflow-y: auto;
+  min-height: 0;
+}
+#ar-hud .ar-picker-item {
+  text-align: left;
+  background: transparent;
+  color: var(--ns-text);
+  border: 1px solid var(--ns-border) !important;
+  padding: 0 var(--ns-space-3);
+}

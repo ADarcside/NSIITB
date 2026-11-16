@@ -2,6 +2,7 @@
 # Namma Space: build the public viewer site with one published scene, ready for static hosting.
 # Usage: scripts/build_site.sh runs/room_v1/publish/scn_hostelroomaa [out_dir]
 # The scene opens by default; other scenes are not included. Output: site/ (index.html, assets/, <scene_id>/).
+# With VITE_AR=1 in the environment the site also gets ar.html (the phone AR guide); without it, no AR page.
 set -euo pipefail
 scene_dir="${1:?usage: scripts/build_site.sh <run>/publish/<scene_id> [out_dir]}"
 out="${2:-site}"
