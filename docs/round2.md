@@ -36,6 +36,10 @@ Everything spatial reads one file the pipeline already writes: the scene's walka
 
 On K-720 a route is found from the start spot to all 14 places and between all 182 pairs of places.
 
+## Voice guide
+
+While a route is active, a small guide picks one line at a time and both shows it under the route card and speaks it (browser speech, voice on by default, the speaker button mutes it and the choice is remembered). Lines, by priority: arrived, turn now, turn around, new route, turn coming (4 to 8 m ahead), start, and distance left. Left and right come from the route's own shape, distances are rounded and never said under 2 m, and each corner is said once, so small tracking jitter doesn't make it chatter. It works for **Take me there** and for walking yourself, and stays quiet in tag mode. Code: `viewer/src/nav/tour_guide.ts` (which line to say), `route_follower.ts` (where you are on the route), `guide_phrases.ts`, `speaker.ts` and `voice_guide.ts`; tests in `tests/viewer/tour_guide.test.ts`.
+
 ## Tagging (repeatable live)
 
 1. Open the viewer with `?tag=1` and walk to the place.
