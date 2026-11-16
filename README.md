@@ -298,7 +298,7 @@ npx vite preview --outDir site      # optional local check of the built site
 ```
 `site/` holds `index.html`, `assets/` and `<scene_id>/`. The scene opens by default (no `?scene=` needed), and all paths are relative, so the site works from a sub-path such as GitHub Pages. Local test scenes in `viewer/public/` are left out.
 
-We host it on GitHub Pages from a separate repository (`ADarcside/namma-space`) that holds only the built site: push the contents of `site/` to the `main` branch root of that repository, with Pages set to serve from `main` / root.
+We host it on GitHub Pages from a separate repository ([ADarcside/namma-space](https://github.com/ADarcside/namma-space)) that holds only the built site: push the contents of `site/` to the `main` branch root of that repository, with Pages set to serve from `main` / root.
 
 **Public Round 2 viewer: https://adarcside.github.io/namma-space/round2/** (hostel room K-720 with places, search and paths). The Round 1 viewer stays at https://adarcside.github.io/namma-space/ .
 
