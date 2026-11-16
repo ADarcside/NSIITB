@@ -63,6 +63,13 @@ export class Footsteps {
     return this._muted;
   }
 
+  private _duck = 1;
+
+  /** Lowers the footsteps (0..1 of their volume) while the voice guide speaks; 1 restores them. */
+  setDuck(factor: number): void {
+    this._duck = Math.max(0, Math.min(1, factor));
+  }
+
   /** One footstep; landing = a heavier thump after a jump. */
   play(sprint = false, landing = false): void {
     if (this._muted || this._volume <= 0) return;
@@ -80,7 +87,7 @@ export class Footsteps {
 
     const gain = ctx.createGain();
     // Base levels at full volume (raised 50% on 30 Oct: too quiet on laptop speakers)
-    const peak = Math.max(0.0002, (landing ? 0.6 : sprint ? 0.5 : 0.375) * this._volume);
+    const peak = Math.max(0.0002, (landing ? 0.6 : sprint ? 0.5 : 0.375) * this._volume * this._duck);
     gain.gain.setValueAtTime(0.0001, t);
     gain.gain.exponentialRampToValueAtTime(peak, t + 0.008);
     gain.gain.exponentialRampToValueAtTime(0.0001, t + (landing ? 0.09 : 0.06));

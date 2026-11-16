@@ -28,6 +28,7 @@ import { validatePoiSet, PoiDraftStore, poiGoal } from './nav/pois.js';
 import { saveConfigFromEnv, saveLayoutLive, SaveError } from './nav/publish.js';
 import { shareUrl, resolvePoiRef } from './nav/share.js';
 import { activeRoute, arGuideLoader } from './nav/active_route.js';
+import { loadVoiceOn, saveVoiceOn, primeSpeechOnFirstGesture } from './nav/voice_pref.js';
 import type { TagUI } from './ui/tag_ui.js';
 import { loadFeelSettings, mountFeelSettings } from './ui/walk_feel_settings.js';
 import {
@@ -228,6 +229,73 @@ async function bootstrap() {
     let lastPlanPose: { x: number; z: number } | null = null;
     let lastPlanTime = 0;
 
+    // Voice guide (nav/voice_guide.ts): talks the walker along a route from where they stand, in
+    // Take me there and when they walk it themselves (turns, distance left, arrival; directions
+    // only). It loads on the first route, so the viewer download does not grow. Voice starts on
+    // and the route card's speaker button mutes it; the card's live line shows the same words.
+    // Not in tag mode, where routes jump around while tags are edited.
+    type VoiceModule = typeof import('./nav/voice_guide.js');
+    let voiceMod: VoiceModule | null = null;
+    let voice: InstanceType<VoiceModule['VoiceGuide']> | null = null;
+    let voiceLoading = false;
+    /** The place the guide is talking the walker to, or null */
+    let guidedId: string | null = null;
+    /** The last replan happened because the walker left the route (for "Finding a new way") */
+    let reroutePending = false;
+    let voiceOn = loadVoiceOn();
+    /** Walker speed sample, so "Turn around" only counts while moving */
+    let moveSample = { x: 0, z: 0, t: 0 };
+    let walkerMoving = false;
+    const voiceAvailable = !isTagMode && 'speechSynthesis' in window;
+    navUI.setVoiceAvailable(voiceAvailable);
+    navUI.setVoiceOn(voiceOn);
+    if (voiceAvailable) primeSpeechOnFirstGesture();
+    navUI.onVoiceToggle(() => {
+      if (voice) voiceOn = voice.toggleVoice();
+      else {
+        voiceOn = !voiceOn;
+        saveVoiceOn(voiceOn);
+      }
+      navUI.setVoiceOn(voiceOn);
+    });
+
+    /** Starts, keeps or ends the voice guide to match the route on screen */
+    const syncGuide = () => {
+      const want = !isTagMode && targetPoi && !routeFrom && currentPathPoints ? targetPoi : null;
+      if (!want) {
+        if (guidedId !== null) {
+          voice?.end();
+          guidedId = null;
+          navUI.setGuideLine(null);
+        }
+        return;
+      }
+      if (!voiceMod) {
+        if (!voiceLoading) {
+          voiceLoading = true;
+          void import('./nav/voice_guide.js')
+            .then(m => {
+              voiceMod = m;
+              voice = new m.VoiceGuide('en');
+              voice.speaker.onSpeaking(on => footsteps.setDuck(on ? 0.3 : 1));
+              syncGuide();
+            })
+            .catch(err => console.warn('[Viewer] voice guide unavailable:', err));
+        }
+        return;
+      }
+      if (!voice || !movementController || want.poi_id === guidedId) return;
+      guidedId = want.poi_id;
+      reroutePending = false;
+      const pose = movementController.pose;
+      voice.begin(performance.now(), want.name, voiceMod.viewerInput(currentPathPoints, { x: pose.x, z: pose.z }, pose.yaw, false, false));
+    };
+
+    /** The walker reached the guided place: the arrival line, before the route is cleared */
+    const guideArrived = () => {
+      if (guidedId !== null) voice?.arrive(performance.now());
+    };
+
     const planRoute = (poi: POI, animate = true) => {
       targetPoi = poi;
       if (routeFrom?.poi_id === poi.poi_id) routeFrom = null;
@@ -237,6 +305,8 @@ async function bootstrap() {
       const start = routeFrom ? poiGoal(routeFrom) : { x: pose.x, z: pose.z };
       lastPlanPose = routeFrom ? null : { x: pose.x, z: pose.z };
       lastPlanTime = performance.now();
+      // Replanned because the walker left the old route: the guide may say a new way was found
+      if (voiceMod && guidedId === poi.poi_id && !routeFrom && voiceMod.isOffRoute(currentPathPoints, start)) reroutePending = true;
 
       let lengthM: number | null;
       if (planner) {
@@ -255,6 +325,7 @@ async function bootstrap() {
       routeView.setHighlight(poi.poi_id);
       navUI.setFromChoices(activePois, routeFrom?.poi_id ?? null, poi.poi_id);
       activeRoute.set({ to: poi, from: routeFrom, points: currentPathPoints, lengthM });
+      syncGuide();
     };
 
     /** Ends the route (cleared, or arrived) */
@@ -265,6 +336,7 @@ async function bootstrap() {
       routeView.setPath(null);
       routeView.setHighlight(null);
       activeRoute.set(null);
+      syncGuide();
     };
 
     const getDistanceToPoi = (poi: POI): number | null => {
@@ -357,6 +429,7 @@ async function bootstrap() {
             const arrivedName = targetPoi.name;
             const arrivedId = targetPoi.poi_id;
             celebrateArrival(currentPathPoints?.[currentPathPoints.length - 1]);
+            guideArrived();
             endRoute();
             navUI.showArrived(arrivedName, arrivedId);
           }
@@ -1138,6 +1211,7 @@ async function bootstrap() {
               const arrivedName = targetPoi.name;
               const arrivedId = targetPoi.poi_id;
               celebrateArrival(goal);
+              guideArrived();
               endRoute();
               navUI.showArrived(arrivedName, arrivedId);
             } else if (
@@ -1157,6 +1231,20 @@ async function bootstrap() {
             planRoute(targetPoi, false);
           }
         }
+      }
+
+      // Voice guide: one step per frame while it is guiding (the route block above may have just ended it)
+      if (movementController && voice && voiceMod && guidedId !== null && currentPathPoints) {
+        const pose = movementController.pose;
+        if (currentTime - moveSample.t >= 250) {
+          const sec = (currentTime - moveSample.t) / 1000;
+          walkerMoving = sec < 1 && Math.hypot(pose.x - moveSample.x, pose.z - moveSample.z) / sec > 0.3;
+          moveSample = { x: pose.x, z: pose.z, t: currentTime };
+        }
+        const input = voiceMod.viewerInput(currentPathPoints, { x: pose.x, z: pose.z }, pose.yaw, walkerMoving, reroutePending);
+        reroutePending = false;
+        voice.update(currentTime, input);
+        navUI.setGuideLine(voice.line(input, currentTime).instruction);
       }
 
       multiplayer?.update(dt);

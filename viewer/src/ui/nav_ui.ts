@@ -59,6 +59,10 @@ export class NavUI {
   private _fromValue: string | null = null;
   private _fromActive = 0;
   private readonly _routeContent: HTMLElement;
+  /** Route card's main line ("To Desk 12.0 m about 10 s") and the voice guide's live line under it */
+  private readonly _routeMain: HTMLElement;
+  private readonly _routeGuide: HTMLElement;
+  private readonly _routeVoiceBtn: HTMLButtonElement;
   private readonly _routeWalkBtn: HTMLButtonElement;
   private readonly _routeArBtn: HTMLButtonElement;
   private readonly _routeClearBtn: HTMLButtonElement;
@@ -93,6 +97,7 @@ export class NavUI {
   private readonly _shareCallbacks: ((poi: POI) => void)[] = [];
   private readonly _fromCallbacks: ((poiId: string | null) => void)[] = [];
   private readonly _arCallbacks: (() => void)[] = [];
+  private readonly _voiceCallbacks: (() => void)[] = [];
 
   constructor(options: NavUIOptions = {}) {
     const parent = options.container ?? document.body;
@@ -176,7 +181,18 @@ export class NavUI {
 
     this._routeContent = document.createElement('div');
     this._routeContent.className = 'nav-route-content';
-    this._routeContent.setAttribute('aria-live', 'polite');
+    this._routeMain = document.createElement('div');
+    this._routeMain.className = 'nav-route-main';
+    this._routeMain.setAttribute('aria-live', 'polite');
+    this._routeGuide = document.createElement('div');
+    this._routeGuide.className = 'nav-route-guide hidden';
+    this._routeContent.append(this._routeMain, this._routeGuide);
+
+    // Voice guide on / off (text in the live line stays either way)
+    this._routeVoiceBtn = document.createElement('button');
+    this._routeVoiceBtn.type = 'button';
+    this._routeVoiceBtn.className = 'nav-icon-btn nav-route-voice-btn ns-press';
+    this.setVoiceOn(true);
 
     this._routeWalkBtn = document.createElement('button');
     this._routeWalkBtn.className = 'nav-route-walk-btn ns-press';
@@ -196,7 +212,7 @@ export class NavUI {
     this._routeClearBtn.title = 'Clear route';
     this._routeClearBtn.innerHTML = icon('close', 16);
 
-    this._routeCard.append(this._routeFrom, this._routeContent, this._routeWalkBtn, this._routeArBtn, this._routeClearBtn);
+    this._routeCard.append(this._routeFrom, this._routeContent, this._routeVoiceBtn, this._routeWalkBtn, this._routeArBtn, this._routeClearBtn);
 
     // 3. POI Info Card (bottom-left)
     this._poiCard = document.createElement('div');
@@ -323,6 +339,32 @@ export class NavUI {
 
   onAr(cb: () => void): void {
     this._arCallbacks.push(cb);
+  }
+
+  /** Speaker button on the route card */
+  onVoiceToggle(cb: () => void): void {
+    this._voiceCallbacks.push(cb);
+  }
+
+  /** Shows the speaker button as on or muted; `label` is its hover text */
+  setVoiceOn(on: boolean, label = on ? 'Voice guide on. Tap to mute.' : 'Voice guide muted. Tap to turn it on.'): void {
+    this._routeVoiceBtn.innerHTML = icon(on ? 'volume' : 'mute', 18);
+    this._routeVoiceBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    this._routeVoiceBtn.setAttribute('aria-label', 'Voice guide');
+    this._routeVoiceBtn.title = label;
+    this._routeVoiceBtn.classList.toggle('muted', !on);
+  }
+
+  /** Hides the speaker button where the browser has no speech */
+  setVoiceAvailable(on: boolean): void {
+    this._routeVoiceBtn.classList.toggle('hidden', !on);
+  }
+
+  /** The voice guide's live line under the route ("In 5 m, turn left"); null hides it */
+  setGuideLine(text: string | null): void {
+    const shown = text ?? '';
+    if (this._routeGuide.textContent !== shown) this._routeGuide.textContent = shown;
+    this._routeGuide.classList.toggle('hidden', !text);
   }
 
   /** Share button on the place card */
@@ -466,9 +508,9 @@ export class NavUI {
     }
 
     if (metres !== null) {
-      this._routeContent.innerHTML = `To <strong>${escapeHtml(name)}</strong> <span class="nav-route-dist ns-num">${metres.toFixed(1)} m</span><span class="nav-route-time">${walkTime(metres)}</span>${escapeHtml(suffix)}`;
+      this._routeMain.innerHTML = `To <strong>${escapeHtml(name)}</strong> <span class="nav-route-dist ns-num">${metres.toFixed(1)} m</span><span class="nav-route-time">${walkTime(metres)}</span>${escapeHtml(suffix)}`;
     } else {
-      this._routeContent.innerHTML = `No walkable path to <strong>${escapeHtml(name)}</strong>`;
+      this._routeMain.innerHTML = `No walkable path to <strong>${escapeHtml(name)}</strong>`;
     }
     this._routeCard.classList.toggle('no-path', metres === null);
     this._routeCard.classList.remove('arrived');
@@ -485,7 +527,8 @@ export class NavUI {
       window.clearTimeout(this._blockedTimer);
       this._blockedTimer = null;
     }
-    this._routeContent.innerHTML = `You've arrived at <strong>${escapeHtml(name)}</strong>`;
+    this._routeMain.innerHTML = `You've arrived at <strong>${escapeHtml(name)}</strong>`;
+    this.setGuideLine(null);
     this._routeCard.classList.add('arrived');
     this._routeCard.classList.remove('no-path');
     this._routeCard.classList.remove('hidden');
@@ -505,14 +548,14 @@ export class NavUI {
       this._blockedTimer = null;
     }
 
-    const previousHtml = this._routeContent.innerHTML;
-    this._routeContent.innerHTML = `Couldn't reach <strong>${escapeHtml(name)}</strong>, blocked`;
+    const previousHtml = this._routeMain.innerHTML;
+    this._routeMain.innerHTML = `Couldn't reach <strong>${escapeHtml(name)}</strong>, blocked`;
     this._routeCard.classList.remove('hidden');
 
     this._blockedTimer = window.setTimeout(() => {
       this._blockedTimer = null;
       if (previousHtml && !this._routeCard.classList.contains('hidden')) {
-        this._routeContent.innerHTML = previousHtml;
+        this._routeMain.innerHTML = previousHtml;
       }
     }, 3000);
   }
@@ -527,6 +570,7 @@ export class NavUI {
       this._blockedTimer = null;
     }
     this._routeCard.classList.add('hidden');
+    this.setGuideLine(null);
     this._input.value = '';
   }
 
@@ -667,6 +711,7 @@ export class NavUI {
     });
 
     this._routeArBtn.addEventListener('click', () => this._arCallbacks.forEach(cb => cb()));
+    this._routeVoiceBtn.addEventListener('click', () => this._voiceCallbacks.forEach(cb => cb()));
 
     this._fromBtn.addEventListener('click', () => {
       if (this._fromList.classList.contains('hidden')) this._openFrom();

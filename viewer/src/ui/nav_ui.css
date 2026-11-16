@@ -170,6 +170,18 @@
   white-space: nowrap;
 }
 .nav-route-content strong { color: var(--ns-route); font-weight: 700; }
+.nav-route-main, .nav-route-guide { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Voice guide's live line ("In 5 m, turn left"), under the destination; text stays when muted */
+.nav-route-guide {
+  margin-top: 1px;
+  color: var(--ns-text-strong);
+  font-size: var(--ns-fs-sm);
+  font-weight: 700;
+}
+.nav-route-guide.hidden { display: none; }
+.nav-route-voice-btn { color: var(--ns-route); }
+.nav-route-voice-btn.muted { color: var(--ns-text-muted); }
+.nav-route-voice-btn.hidden { display: none; }
 .nav-route-time {
   margin-left: 6px;
   color: var(--ns-text-muted);
@@ -444,6 +456,8 @@
    so the route bar steps aside instead of stacking under it (it comes back when the card closes) */
 @media (max-width: 900px), (pointer: coarse) and (max-height: 520px) {
   .nav-bottom-stack:has(> .nav-poi-card:not(.hidden)) > .nav-route-card { display: none; }
+  /* With the speaker button in the bar, the walking time steps aside so the place and metres fit */
+  .nav-route-card:has(> .nav-route-voice-btn:not(.hidden)) .nav-route-time { display: none; }
 }
 
 /* Phones: a slim place card, two rows: name, distance, close / Navigate, Look.
@@ -500,7 +514,7 @@
     display: flex;
     flex-direction: column;
     gap: var(--ns-space-2);
-    width: min(460px, calc(100% - 2 * (var(--ns-hud-left) + 120px)));
+    width: min(540px, calc(100% - 2 * (var(--ns-hud-left) + 120px)));
     pointer-events: none;
   }
   /* One-row route card: the start picker is a compact chip */
@@ -528,6 +542,9 @@
 @media (max-width: 760px), (pointer: coarse) and (max-width: 900px) and (min-height: 521px) {
   .nav-route-card { flex-wrap: wrap; row-gap: 6px; padding-top: 6px; }
   .nav-route-from { flex: 0 0 calc(100% + 10px); max-width: none; margin-left: -10px; margin-right: 0; }
+  /* The speaker button shares the start picker's row, so the destination keeps its room */
+  .nav-route-card:has(> .nav-route-voice-btn:not(.hidden)) > .nav-route-from { flex-basis: calc(100% + 10px - var(--ns-target) - var(--ns-space-2)); order: -2; }
+  .nav-route-voice-btn { order: -1; }
   .nav-from-btn { min-height: 40px; font-size: var(--ns-fs-md); }
   .nav-from-list { max-width: none; right: 0; }
   .nav-from-option { min-height: 44px; }
