@@ -527,8 +527,9 @@ async function bootstrap() {
           getMesh: () => renderer.splatMesh,
           worldFromSplat: manifest.transform.world_from_splat,
           getPose: () => movementController?.pose ?? { x: manifest.start_pose.x, z: manifest.start_pose.z },
-          // Tag mode owns the tags (an unsaved draft may differ from the live ones): admin leaves them as they are
-          getPois: () => (mode === 'admin' ? activePois : manifestPois),
+          // Tag mode owns the tags (an unsaved draft may differ from the live ones): admin leaves them as they are.
+          // Visitors never get the AR floor marks back from here (they are hidden in applyPois below)
+          getPois: () => (mode === 'admin' ? activePois : visiblePlaces(manifestPois)),
           applyGrid: g => {
             gridProvider = new GridCollisionProvider(g);
             planner = new NavPlanner(g);
