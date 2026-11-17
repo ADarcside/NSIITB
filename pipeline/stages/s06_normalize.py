@@ -273,7 +273,6 @@ def run_s06_normalize(
         keep = np.ones(len(data), dtype=bool)
         clean_stats["kept"] = int(len(data))
     clean_path = r_dir / CLEAN_PLY_NAME
-    write_ply_subset(ply_path, clean_path, data, keep)
 
     kept_world = world_xyz[keep]
     if walls_xz:
@@ -320,6 +319,34 @@ def run_s06_normalize(
         pc = pc[(pc[:, 0] >= 0) & (pc[:, 0] < free.shape[0]) & (pc[:, 1] >= 0) & (pc[:, 1] < free.shape[1])]
         navgrid.write_preview(r_dir / "navgrid.png", free, pc)
 
+    # Floater filter: candidates by rule, put back any Gaussian whose removal opens a hole (pipeline/floaters.py).
+    # Runs on the grid built from the unfiltered splats; that grid is the one published.
+    floater_metrics: Dict[str, Any] = {}
+    f_cfg = config.get("floaters", {})
+    nav_doc = json.loads((r_dir / NAVGRID_NAME).read_text()) if (r_dir / NAVGRID_NAME).is_file() else None
+    if f_cfg.get("enabled", False) and nav_doc is None:
+        floater_metrics = {"floaters": {"enabled": True, "status": "skipped", "reason": "no walkable grid to place viewpoints"}}
+    elif f_cfg.get("enabled", False):
+        from pipeline import floaters as fl
+        scene = fl.Scene.from_splat(data, names, m)
+        f_keep, f_stats = fl.filter_floaters(scene, nav_doc, f_cfg, room_box["max"][1] if room_box else None)
+        verify = f_stats.get("verify", {})
+        f_stats["verify"] = {k: v for k, v in verify.items() if not k.startswith("per_view")}
+        keep = keep & f_keep
+        # Grid check: rebuild from the cleaned splats and count cells that differ from the published grid
+        if f_stats.get("removed"):
+            free2, meta2 = navgrid.build_free_mask(world_xyz[keep], opacity[keep], bounds_xz, start_xz, grid_cfg, None)
+            free1 = navgrid.decode_free_bits(nav_doc["free_bits_b64"], nav_doc["width"], nav_doc["height"])
+            f_stats["grid_free_cells_differing"] = int((free1 != free2).sum()) if free2.shape == free1.shape else -1
+            if nav_doc.get("layers"):
+                occ2, _ = navgrid.build_layers(world_xyz[keep], opacity[keep], meta2, bounds_xz, grid_cfg.get("layers", {}))
+                lay = nav_doc["layers"]
+                occ1 = fl.decode_bits(lay["occupied_bits_b64"], lay["count"] * nav_doc["width"] * nav_doc["height"]).reshape(occ2.shape)
+                f_stats["grid_layer_cells_differing"] = int((occ1 != occ2).sum())
+        floater_metrics = {"floaters": f_stats}
+        clean_stats["kept"] = int(keep.sum())
+    write_ply_subset(ply_path, clean_path, data, keep)
+
     metrics = {
         "input_ply": str(ply_path),
         "clean_ply": str(clean_path),
@@ -340,6 +367,7 @@ def run_s06_normalize(
         **room_metrics,
         "bounds_xz": bounds_xz,
         **grid_metrics,
+        **floater_metrics,
     }
 
     transform = {

@@ -74,7 +74,7 @@ jobs:
       # S01/S02 tests cut frames from a synthetic video with ffmpeg
       - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
       # The tests stub COLMAP, training and Open3D, so the heavy GPU packages are not needed here
-      - run: pip install pytest==9.1.1 jsonschema==4.23.0 numpy==2.5.3 scipy==1.18.1 opencv-python-headless==4.14.0.94
+      - run: pip install pytest==9.1.1 jsonschema==4.23.0 numpy==2.5.3 scipy==1.18.1 numba==0.68.1 opencv-python-headless==4.14.0.94
       - name: Make the synthetic dev scene the contract tests check
         run: python scripts/make_dev_scene.py
       - run: python -m pytest -q tests/pipeline

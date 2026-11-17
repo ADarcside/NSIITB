@@ -1,5 +1,6 @@
 numpy==2.5.3
 scipy==1.18.1
+numba==0.68.1
 opencv-python-headless==4.14.0.94
 pycolmap==4.2.1
 open3d==0.20.0
