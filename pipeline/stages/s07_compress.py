@@ -264,11 +264,23 @@ def run_s07_compress(
 
     # 3. Create lite PLY via opacity * volume ranking
     print(f"[s07_compress] Selecting top {lite_fraction:.0%} Gaussians by opacity * volume...")
-    keep_indices = select_lite_gaussians(data, prop_names, lite_fraction=lite_fraction)
-    num_lite = len(keep_indices)
+    # The floor backing (S06, pipeline/floor.py) is the last rows of clean.ply: its thin splats would lose the
+    # ranking and leave Lite's floor see-through, so rank the room only and append S06's coarser copy instead.
+    backing_lite = None
+    backing_npz = r_dir / "floor_backing_lite.npz"
+    room_rows = num_full
+    if backing_npz.is_file():
+        b = np.load(backing_npz)
+        if int(b["full_rows"]) < num_full and b["rows"].shape[1:] == (len(prop_names),):
+            room_rows, backing_lite = num_full - int(b["full_rows"]), b["rows"]
+    keep_indices = select_lite_gaussians(data[:room_rows], prop_names, lite_fraction=lite_fraction)
+    num_lite = len(keep_indices) + (len(backing_lite) if backing_lite is not None else 0)
     temp_lite_ply = publish_dir / "temp_lite.ply"
     try:
         write_ply_subset(clean_ply, temp_lite_ply, data, keep_indices)
+        if backing_lite is not None:
+            from pipeline.floor import append_rows
+            append_rows(temp_lite_ply, backing_lite)
         print(f"[s07_compress] Converting lite subset ({num_lite:,} Gaussians) to SPZ v{spz_version}...")
         convert_ply_to_spz(temp_lite_ply, lite_spz, spz_version=spz_version)
         check_spz_magic(lite_spz)

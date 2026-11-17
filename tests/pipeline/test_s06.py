@@ -164,6 +164,22 @@ def build_run(tmp_path, pts_world, sizes=None, cam_radius=(1.0, 1.2)):
     return run, pts_world, tape
 
 
+def quick_floor(cfg_path, tmp_path):
+    """The config with a coarse floor backing check (fewer views, smaller renders, 3 cm sheet) so CI stays fast.
+    The full-quality check runs on real scenes; here it only has to run and keep its contract."""
+    text = Path(cfg_path).read_text()
+    a = text.index("\nfloor:")
+    b = text.index("\n\n", a)
+    text = text[:b] + ("\n  view_step_m: 2.0\n  heights_m: [1.5]\n  render_px: 64\n  backing_step_m: 0.03"
+                       "\n  backing_sigma_m: 0.021") + text[b:]
+    out = Path(tmp_path) / f"quick_{Path(cfg_path).name}"
+    out.write_text(text)
+    return out
+
+
+DEFAULT_CFG = Path(__file__).resolve().parents[2] / "pipeline" / "config" / "default.yaml"
+
+
 @pytest.fixture
 def synthetic_run(tmp_path):
     return build_run(tmp_path, room_points_world(np.random.default_rng(1)))
@@ -173,9 +189,9 @@ def world_matrix(transform):
     return np.asarray(transform["world_from_splat"]).reshape(4, 4).T
 
 
-def test_s06_recovers_floor_scale_and_origin_with_tape(synthetic_run):
+def test_s06_recovers_floor_scale_and_origin_with_tape(synthetic_run, tmp_path):
     run, pts_world, tape = synthetic_run
-    tr = run_s06_normalize(run, run / "capture.json")
+    tr = run_s06_normalize(run, run / "capture.json", config_path=quick_floor(DEFAULT_CFG, tmp_path))
     m = world_matrix(tr)
     assert tr["scale_method"] == "tape_pair"
     assert tr["metrics"]["colmap_frame"] in ("dataparser+flip", "flip_only")  # identity dataparser here
@@ -187,6 +203,12 @@ def test_s06_recovers_floor_scale_and_origin_with_tape(synthetic_run):
     splat = np.asarray(json.loads((run / "transform.json").read_text())["world_from_splat"])
     assert splat.shape == (16,)
     data = np.frombuffer((run / "clean.ply").read_bytes().split(b"end_header\n", 1)[1], dtype="<f4").reshape(-1, 62)
+    # The floor backing (pipeline/floor.py) is the last rows: a flat sheet just under the floor
+    n_back = int(np.load(run / "floor_backing_lite.npz")["full_rows"])
+    assert n_back > 0
+    back = nz.apply(m, data[-n_back:, :3].astype(np.float64))
+    assert np.allclose(back[:, 1], -0.012, atol=1e-3)
+    data = data[:-n_back]
     w = nz.apply(m, data[:, :3].astype(np.float64))
     assert np.percentile(w[:, 1], 5) == pytest.approx(0.0, abs=0.02)
     assert np.percentile(w[:, 1], 99.9) == pytest.approx(2.6, abs=0.05)
@@ -196,10 +218,10 @@ def test_s06_recovers_floor_scale_and_origin_with_tape(synthetic_run):
     assert len(data) < len(pts_world) + 50
 
 
-def test_s06_camera_height_prior_without_tape(synthetic_run):
+def test_s06_camera_height_prior_without_tape(synthetic_run, tmp_path):
     run, _, _ = synthetic_run
     (run / "marks_2d.json").unlink()
-    tr = run_s06_normalize(run, run / "capture.json")
+    tr = run_s06_normalize(run, run / "capture.json", config_path=quick_floor(DEFAULT_CFG, tmp_path))
     assert tr["scale_method"].startswith("camera_height_prior")
     assert tr["metrics"]["approximate_scale"] is True
     assert tr["scale"] == pytest.approx(TRUE_SCALE, rel=0.02)
@@ -211,7 +233,7 @@ def test_s06_fails_when_tape_required(synthetic_run, tmp_path):
     (run / "marks_2d.json").unlink()
     cfg = Path(__file__).resolve().parents[2] / "pipeline" / "config" / "default.yaml"
     strict = tmp_path / "strict.yaml"
-    strict.write_text(cfg.read_text().replace("normalize:\n", "normalize:\n  require_tape: true\n"))
+    strict.write_text(quick_floor(cfg, tmp_path).read_text().replace("normalize:\n", "normalize:\n  require_tape: true\n"))
     with pytest.raises(GateFailure):
         run_s06_normalize(run, run / "capture.json", config_path=strict)
 
@@ -230,7 +252,7 @@ def test_s06_measured_room_scale_walls_and_bounds(tmp_path):
     (run / "capture.json").write_text(json.dumps(cap))
 
     room_cfg = Path(__file__).resolve().parents[2] / "pipeline" / "config" / "room.yaml"
-    tr = run_s06_normalize(run, run / "capture.json", config_path=room_cfg)
+    tr = run_s06_normalize(run, run / "capture.json", config_path=quick_floor(room_cfg, tmp_path))
     met = tr["metrics"]
     assert met["floor_layer"] == "camera_path"
     assert tr["scale_method"] == "room_dims_median"

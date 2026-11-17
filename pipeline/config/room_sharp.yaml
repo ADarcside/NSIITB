@@ -70,6 +70,24 @@ floaters:                     # automatic floater filter in S06 (pipeline/floate
   max_changed_pct: 5.0        # verify gate per view
   prune_unseen: false         # removing never-seen splats is not floater removal; keep off
 
+floor:                        # floor backing in S06 (pipeline/floor.py): clears the low-angle floor fog
+  enabled: true
+  backing_y_m: -0.012         # opaque sheet just under the floor, coloured from the top-down view of the floor
+  backing_step_m: 0.01
+  backing_sigma_m: 0.007
+  floor_band_m: [-0.03, 0.03] # Gaussians that make the floor surface (colour source)
+  remove_below_m: 0.02        # below-floor Gaussians inside the walls are candidates; the put-back check keeps any that still fill a hole
+  wall_margin_m: 0.05
+  view_step_m: 0.6
+  max_hole_pct: 0.05
+
+floor_paint:                  # floor repaint in S06 (pipeline/floor_paint.py): paints the floor sheet from the photos
+  enabled: true               # needs <run>/frames; skipped without them
+  paint_step_m: 0.007
+  paint_sigma_m: 0.005
+  occluder_opacity: 0.5       # solid splats above the floor that hide it from a photo
+  top_views: 6                # median of the best views per floor spot
+
 grid:
   cell_m: 0.05
   height_band_m: [0.2, 1.7]

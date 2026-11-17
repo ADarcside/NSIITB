@@ -345,7 +345,39 @@ def run_s06_normalize(
                 f_stats["grid_layer_cells_differing"] = int((occ1 != occ2).sum())
         floater_metrics = {"floaters": f_stats}
         clean_stats["kept"] = int(keep.sum())
+    # Floor backing (pipeline/floor.py): opaque sheet under the floor, below-floor blobs removed with the put-back check
+    floor_rows = None
+    fb_cfg = config.get("floor", {})
+    if fb_cfg.get("enabled", False) and nav_doc is not None:
+        from pipeline import floaters as fl
+        from pipeline import floor as fb
+        kept_idx = np.flatnonzero(keep)
+        scene = fl.Scene.from_splat(data[kept_idx], names, m)
+        f_keep, f_p, f_col, fb_stats = fb.floor_backing(scene, nav_doc, fb_cfg, room_box["max"][1] if room_box else None)
+        sheet_cfg = fb.merged_config(fb_cfg)
+        fp_cfg = config.get("floor_paint", {})
+        if fb_stats.get("status") == "PASS" and len(f_p) and fp_cfg.get("enabled", False) and (r_dir / "frames").is_dir():
+            # Step 2 (pipeline/floor_paint.py): repaint the floor sheet from the photos, replace the thin floor skin
+            from pipeline import floor_paint as fp
+            cams = fp.world_cameras(r_dir, m, xyz[opacity >= 0.5])
+            f_keep, f_p, f_col, fp_stats = fp.floor_paint(scene, f_keep, nav_doc, cams, r_dir / "frames", f_p, f_col, fp_cfg)
+            sheet_cfg = fp.sheet_config(fp.merged_config(fp_cfg))
+            floater_metrics["floor_paint"] = fp_stats
+        keep = np.zeros(len(data), dtype=bool)
+        keep[kept_idx[f_keep]] = True
+        floor_rows = fb.backing_rows(f_p, f_col, names, m, sheet_cfg) if len(f_p) else None
+        if floor_rows is not None:
+            # S07 keeps the sheet out of the Lite ranking and appends this coarser copy instead
+            np.savez(r_dir / "floor_backing_lite.npz", full_rows=len(floor_rows),
+                     rows=fb.lite_backing_rows(f_p, f_col, names, m, sheet_cfg))
+        floater_metrics["floor"] = {k: v for k, v in fb_stats.items() if not k.startswith("per_view")}
+        clean_stats["kept"] = int(keep.sum())
+    if floor_rows is None and (r_dir / "floor_backing_lite.npz").exists():
+        (r_dir / "floor_backing_lite.npz").unlink()
     write_ply_subset(ply_path, clean_path, data, keep)
+    if floor_rows is not None:
+        from pipeline import floor as fb
+        fb.append_rows(clean_path, floor_rows)
 
     metrics = {
         "input_ply": str(ply_path),

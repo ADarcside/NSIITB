@@ -254,9 +254,11 @@ def camera(eye, target) -> np.ndarray:
     return np.stack([r, -u, f])  # camera x right, y down, z forward
 
 
-def project(scene: Scene, eye, target, w: int, h: int, fov: float, idx: np.ndarray, near: float = 0.15):
-    """Indices kept (in front, near the frame), pixel centres, 2D covariance (with 0.3 px low pass), depth."""
-    v = camera(eye, target)
+def project(scene: Scene, eye, target, w: int, h: int, fov: float, idx: np.ndarray, near: float = 0.15,
+            rot: Optional[np.ndarray] = None):
+    """Indices kept (in front, near the frame), pixel centres, 2D covariance (with 0.3 px low pass), depth.
+    rot: world->camera rotation (x right, y down, z forward) instead of looking from eye at target."""
+    v = camera(eye, target) if rot is None else np.asarray(rot, float)
     pc = (scene.w[idx] - np.asarray(eye, float)) @ v.T
     z = pc[:, 2]
     fl = 0.5 * h / math.tan(math.radians(fov) / 2)
@@ -275,11 +277,12 @@ def project(scene: Scene, eye, target, w: int, h: int, fov: float, idx: np.ndarr
 
 
 def render(scene: Scene, eye, target, size: Tuple[int, int] = (256, 256), fov: float = 90.0,
-           mask: Optional[np.ndarray] = None, contrib: Optional[np.ndarray] = None, near: float = 0.15):
+           mask: Optional[np.ndarray] = None, contrib: Optional[np.ndarray] = None, near: float = 0.15,
+           rot: Optional[np.ndarray] = None):
     """Front-to-back alpha blending. Returns (rgb [h, w, 3], alpha [h, w])."""
     w, h = size
     idx = np.flatnonzero(mask) if mask is not None else np.arange(len(scene))
-    idx, px, py, ca, cb, cc, z = project(scene, eye, target, w, h, fov, idx, near)
+    idx, px, py, ca, cb, cc, z = project(scene, eye, target, w, h, fov, idx, near, rot)
     order = np.argsort(z, kind="stable").astype(np.int64)
     img = np.zeros((h, w, 3), np.float32)
     t_img = np.ones((h, w), np.float32)
@@ -668,7 +671,7 @@ def spz_header(path: Path) -> Tuple[int, int]:
 
 
 def clean_published_scene(scene_dir: Path, out_dir: Path, cfg: Optional[Dict[str, Any]] = None,
-                          room_height_m: Optional[float] = None, lite_decimate: str = "30%",
+                          room_height_m: Optional[float] = None,
                           work_dir: Optional[Path] = None, log=print) -> Dict[str, Any]:
     scene_dir, out_dir = Path(scene_dir), Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -683,25 +686,34 @@ def clean_published_scene(scene_dir: Path, out_dir: Path, cfg: Optional[Dict[str
     scene = Scene.from_splat(data, names, manifest_matrix(manifest))
     keep, stats = filter_floaters(scene, grid, cfg, room_height_m, log)
     np.save(work / "keep.npy", keep)
+    clean_ply = work / "full_clean.ply"
+    if stats.get("status") == "PASS":
+        write_ply(full_ply, clean_ply, data, keep)
+    stats.update(write_published(scene_dir, out_dir, clean_ply if stats.get("status") == "PASS" else None, work))
     (work / "stats.json").write_text(json.dumps(stats, indent=1))
-    if stats.get("status") != "PASS":
+    return stats
+
+
+def write_published(scene_dir: Path, out_dir: Path, clean_ply: Optional[Path], work: Path,
+                    lite_decimate: str = "30%", lite_ply: Optional[Path] = None) -> Dict[str, Any]:
+    """Writes full.spz (spz v3) from clean_ply, rebuilds Lite from it, copies grid/pois untouched and patches
+    only sha256 / bytes / gaussians of full and lite in the manifest text, so every other byte stays identical.
+    clean_ply None = copy the input scene unchanged. lite_ply = a ready Lite PLY to use instead of decimating."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    if clean_ply is None:
         for name in ("full.spz", "lite.spz", "manifest.json", "grid.json", "pois.json"):
             if (scene_dir / name).exists():
                 shutil.copy2(scene_dir / name, out_dir / name)
-        return stats
-
-    clean_ply = work / "full_clean.ply"
-    write_ply(full_ply, clean_ply, data, keep)
+        return {}
     splat_transform("-w", "--spz-version", "3", str(clean_ply), str(out_dir / "full.spz"))
-    lite_ply = work / "lite_clean.ply"
-    splat_transform("-w", "-g", "cpu", str(clean_ply), "--decimate-adaptive", lite_decimate, str(lite_ply))
+    if lite_ply is None:
+        lite_ply = work / "lite_clean.ply"
+        splat_transform("-w", "-g", "cpu", str(clean_ply), "--decimate-adaptive", lite_decimate, str(lite_ply))
     splat_transform("-w", "--spz-version", "3", str(lite_ply), str(out_dir / "lite.spz"))
     for name in ("grid.json", "pois.json"):
         if (scene_dir / name).exists():
             shutil.copy2(scene_dir / name, out_dir / name)
-
-    # Manifest: only sha256 / bytes / gaussians of full and lite change. Edit the text in place so every
-    # other byte (transform, bounds, start pose, grid and pois entries) stays identical.
+    manifest = json.loads((scene_dir / "manifest.json").read_text())
     text = (scene_dir / "manifest.json").read_text()
     files = {}
     for kind, name in (("full", "full.spz"), ("lite", "lite.spz")):
@@ -718,9 +730,7 @@ def clean_published_scene(scene_dir: Path, out_dir: Path, cfg: Optional[Dict[str
                     raise RuntimeError(f"manifest: '{old_s}' is not unique, cannot patch in place")
                 text = text.replace(old_s, new_s)
     (out_dir / "manifest.json").write_text(text)
-    stats["files"] = files
-    (work / "stats.json").write_text(json.dumps(stats, indent=1))
-    return stats
+    return {"files": files}
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
