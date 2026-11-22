@@ -17,9 +17,9 @@
       "kind": "splat_full",
       "format": "spz",
       "uri": "full.spz",
-      "sha256": "e0fb549d2cdda7482cd87b9450a63d65c578a7ae16a154a636c640a5b2f3b65d",
-      "bytes": 45480559,
-      "gaussians": 2340047
+      "sha256": "05e55f8970c618fdd5b31658aa5bdfeb5d5948e07728f4c32a66e638f18ff404",
+      "bytes": 42359106,
+      "gaussians": 1881439
     },
     "ast_hostelroomlt": {
       "schema_version": 1,
@@ -27,9 +27,9 @@
       "kind": "splat_lite",
       "format": "spz",
       "uri": "lite.spz",
-      "sha256": "ff0ec26b09525f73470df95bab09b3723c42da70f822775cfb3638032a2e837b",
-      "bytes": 13086803,
-      "gaussians": 676239
+      "sha256": "1f1208fa4fb92e190607996e183b72854d3ecb9da5f13cbc2edad1066fad90ef",
+      "bytes": 12274946,
+      "gaussians": 564432
     },
     "ast_hostelroomgd": {
       "schema_version": 1,
