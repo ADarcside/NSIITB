@@ -17,7 +17,7 @@ import { GhostCollisionProvider } from './collision/ghost.js';
 import { GridCollisionProvider } from './collision/grid.js';
 import { FirstPersonMovementController, BASE_FOV_DEG, type MoveMode } from './controls/movement.js';
 import { Footsteps } from './controls/footsteps.js';
-import { VanillaAppUI, isTypingTarget } from './ui/app_ui.js';
+import { VanillaAppUI, isTypingTarget, sceneIdOf } from './ui/app_ui.js';
 import { NavUI } from './ui/nav_ui.js';
 import { RouteView } from './nav/route_view.js';
 import { MinimapUI } from './ui/minimap.js';
@@ -43,6 +43,7 @@ import {
 import { parseLayout, type PublishedLayout } from './layout/layout_file.js';
 import { ViewerError } from './types.js';
 import { preventPageZoom, resetPageZoom } from './ui/no_page_zoom.js';
+import { loadRooms, mountRoomPicker } from './ui/room_picker.js';
 import type { NavGrid, POI } from './contracts/types.js';
 
 // AR guide (VITE_AR=1 builds only): the route card's AR button opens ar.html; loaded on demand
@@ -133,6 +134,9 @@ async function bootstrap() {
   const mpButtonFlag = import.meta.env.VITE_MP_BUTTON as string | undefined;
   const mpButtonMode = !isTagMode && mpButtonFlag === '1' && Boolean(import.meta.env.VITE_MP_URL);
   let onFriendsClick: (() => void) | null = null;
+
+  // Room picker (rooms.json next to the scene folders); not in the dev scene
+  if (!isDevScene) void loadRooms(baseUrl).then(rooms => mountRoomPicker(rooms, sceneIdOf(sceneParam)));
 
   const ui = new VanillaAppUI({
     isDevScene,
@@ -552,7 +556,7 @@ async function bootstrap() {
           mode,
           published: published ? { moves: published.moves, locked: published.locked, boxes: published.boxes, updatedAt: published.updated_at } : undefined,
         });
-        const saveConfig = saveConfigFromEnv(import.meta.env);
+        const saveConfig = saveConfigFromEnv(import.meta.env, manifest.scene_id);
         /** Admin: Save for everyone (same GitHub key and live folder as the tags) */
         const saveLayout = async () => {
           const toast = (msg: string) => rrUI?.toast(msg);
@@ -716,7 +720,7 @@ async function bootstrap() {
           minimap?.setPlaceMode(on);
           routeView.setDraggable(on);
         },
-        saveConfig: saveConfigFromEnv(import.meta.env),
+        saveConfig: saveConfigFromEnv(import.meta.env, manifest.scene_id),
       });
 
       if (initialDraft !== null) {

@@ -32,13 +32,18 @@ export function isTypingTarget(e: KeyboardEvent): boolean {
 }
 
 /** Display name and kind for a scene id (or a manifest URL) on the loading screen. Unknown scenes show their id. */
-export function roomLabel(scene: string): { name: string; kind: string } {
+export function sceneIdOf(scene: string): string {
   // A full manifest URL (".../scn_hostelroomac/manifest.json") names its scene by the folder it sits in
   const parts = scene.split(/[?#]/)[0].split('/').filter(Boolean);
   if (parts.length > 1 && /\.json$/i.test(parts[parts.length - 1])) parts.pop();
-  const sceneId = parts.length ? parts[parts.length - 1] : scene;
+  return parts.length ? parts[parts.length - 1] : scene;
+}
+
+export function roomLabel(scene: string): { name: string; kind: string } {
+  const sceneId = sceneIdOf(scene);
   const known: Record<string, { name: string; kind: string }> = {
     scn_hostelroomac: { name: 'K-720', kind: 'Hostel room' },
+    scn_hostelroom3f: { name: 'Room 3', kind: 'Hostel room' },
   };
   if (known[sceneId]) return known[sceneId];
   if (sceneId === 'dev' || sceneId.startsWith('scn_dev')) return { name: 'Dev room', kind: 'Synthetic test scene' };

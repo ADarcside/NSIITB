@@ -75,6 +75,22 @@ describe('Save to live', () => {
     expect(c).toEqual(config);
   });
 
+  it('saves to the folder of the room shown, and the source copy only for the default room', () => {
+    const env = {
+      VITE_DEFAULT_SCENE: 'scn_hostelroomac',
+      VITE_SAVE_LIVE: 'ADarcside/namma-space@main:round2/scn_hostelroomac',
+      VITE_SAVE_SOURCE: 'ADarcside/NSIITB@round-2:sample/test-capture/pois.json',
+    };
+    expect(saveConfigFromEnv(env, 'scn_hostelroomac')).toEqual(config);
+    const other = saveConfigFromEnv(env, 'scn_hostelroom3f')!;
+    expect(other.live.path).toBe('round2/scn_hostelroom3f');
+    expect(other.source).toBeUndefined();
+    const tpl = saveConfigFromEnv({ VITE_SAVE_LIVE: 'o/r@main:site/{scene}' }, 'scn_hostelroom3f')!;
+    expect(tpl.live.path).toBe('site/scn_hostelroom3f');
+    // a live folder that names no scene can't follow the room: no saving rather than the wrong room
+    expect(saveConfigFromEnv({ ...env, VITE_SAVE_LIVE: 'o/r@main:fixed' }, 'scn_hostelroom3f')).toBeNull();
+  });
+
   it('rewrites only the pois hash and size in the manifest', () => {
     const out = JSON.parse(updateManifestText(manifestText, 'abc', 42));
     expect(out.asset_table.ast_hostelroomps).toMatchObject({ sha256: 'abc', bytes: 42, uri: 'pois.json' });

@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "scene_id": "scn_hostelroom3f",
+  "space_id": "spc_hostelroom3f",
+  "version": 1,
+  "created_at": "2026-11-23T19:55:35Z",
+  "job_id": "job_hostelroom3f",
+  "assets": {
+    "full": "ast_hostelroomfl",
+    "lite": "ast_hostelroomlt",
+    "grid": "ast_hostelroomgd",
+    "pois": "ast_hostelroomps"
+  },
+  "asset_table": {
+    "ast_hostelroomfl": {
+      "schema_version": 1,
+      "asset_id": "ast_hostelroomfl",
+      "kind": "splat_full",
+      "format": "spz",
+      "uri": "full.spz",
+      "sha256": "4727093553aaabbe821a632a49d17872f27d9a2ee0bac4fa84e6ca11777771db",
+      "bytes": 61360321,
+      "gaussians": 2752587
+    },
+    "ast_hostelroomlt": {
+      "schema_version": 1,
+      "asset_id": "ast_hostelroomlt",
+      "kind": "splat_lite",
+      "format": "spz",
+      "uri": "lite.spz",
+      "sha256": "bbf074eb7d6ebe20e5a31bc6ef6e28ae10f8203c52ef2c1405eb0f9471f81697",
+      "bytes": 6721086,
+      "gaussians": 330311
+    },
+    "ast_hostelroomgd": {
+      "schema_version": 1,
+      "asset_id": "ast_hostelroomgd",
+      "kind": "grid",
+      "format": "json",
+      "uri": "grid.json",
+      "sha256": "2253a2af728cd1118a19be7f2a837b3314f7b74eeb47814d79205de1e70e3d90",
+      "bytes": 41694
+    },
+    "ast_hostelroomps": {
+      "schema_version": 1,
+      "asset_id": "ast_hostelroomps",
+      "kind": "pois",
+      "format": "json",
+      "uri": "pois.json",
+      "sha256": "e4f77adfc1338b1fbb137f9a55c56bec3c32684a88f19c65fd3b9175363a1d4d",
+      "bytes": 3833
+    }
+  },
+  "transform": {
+    "world_from_splat": [
+      -0.3560849137637877,
+      -0.07198948927761159,
+      0.2865298832762993,
+      0.0,
+      0.29091188839343796,
+      -0.16366197735467877,
+      0.3204112306812382,
+      0.0,
+      0.051498871523024355,
+      0.42674418213825766,
+      0.17121797694736898,
+      0.0,
+      0.4002910000959006,
+      1.3758390138740737,
+      -0.25072379744904816,
+      1.0
+    ],
+    "scale": 0.4626859911289137,
+    "method": "floor_ransac+tape_pair",
+    "residuals": {
+      "floor_rms_m": 0.0061,
+      "scale_check_error_pct": null
+    }
+  },
+  "start_pose": {
+    "x": -2.4,
+    "z": -0.85,
+    "yaw_deg": -90.0
+  },
+  "eye_height_m": 1.5,
+  "bounds": {
+    "minX": -2.896,
+    "maxX": 2.979,
+    "minZ": -1.759,
+    "maxZ": 1.238
+  }
+}

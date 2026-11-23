@@ -59,12 +59,29 @@ export function parseTarget(spec: string | undefined): SaveTarget | null {
   return { owner: m[1], repo: m[2], branch: m[3], path: m[4].replace(/^\/+|\/+$/g, '') };
 }
 
-/** Save targets from the build env, or null when saving is not configured for this build. */
-export function saveConfigFromEnv(env: Record<string, unknown>): SaveConfig | null {
+/**
+ * Save targets from the build env for the scene this page shows, or null when saving is not configured.
+ * The live folder follows the room: "{scene}" in VITE_SAVE_LIVE is replaced by the scene id, and a folder
+ * named after the default scene (VITE_DEFAULT_SCENE) becomes the sibling folder of the scene shown. The source
+ * copy is one room's file, so it is only written for that room (the default scene) unless it has "{scene}".
+ */
+export function saveConfigFromEnv(env: Record<string, unknown>, sceneId?: string): SaveConfig | null {
   const live = parseTarget(env.VITE_SAVE_LIVE as string | undefined);
   if (!live) return null;
-  const source = parseTarget(env.VITE_SAVE_SOURCE as string | undefined) ?? undefined;
-  return { live, source };
+  const def = (env.VITE_DEFAULT_SCENE as string | undefined) || '';
+  const scene = sceneId || def;
+  const forScene = (t: SaveTarget): SaveTarget | null => {
+    if (t.path.includes('{scene}')) return scene ? { ...t, path: t.path.split('{scene}').join(scene) } : null;
+    if (!scene || scene === def) return t;
+    const parts = t.path.split('/');
+    if (def && parts[parts.length - 1] === def) return { ...t, path: [...parts.slice(0, -1), scene].join('/') };
+    return null;
+  };
+  const liveT = forScene(live);
+  if (!liveT) return null;
+  const src = parseTarget(env.VITE_SAVE_SOURCE as string | undefined);
+  const source = src && (src.path.includes('{scene}') ? forScene(src) : (!scene || scene === def) ? src : null);
+  return { live: liveT, ...(source ? { source } : {}) };
 }
 
 export const tokenStore = {

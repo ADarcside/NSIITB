@@ -1,0 +1,199 @@
+{
+  "schema_version": 1,
+  "scene_id": "scn_hostelroom3f",
+  "updated_at": "2026-11-23T19:57:38Z",
+  "pois": [
+    {
+      "schema_version": 1,
+      "poi_id": "poi_oxqyz663f2ov",
+      "scene_id": "scn_hostelroom3f",
+      "name": "Door",
+      "category": "exit",
+      "aliases": [
+        "Main door",
+        "Exit",
+        "Entrance",
+        "Way out"
+      ],
+      "position": {
+        "x": -3.05,
+        "y": 1.2,
+        "z": -1.0
+      },
+      "approach": {
+        "x": -2.771,
+        "z": -0.934
+      }
+    },
+    {
+      "schema_version": 1,
+      "poi_id": "poi_etompdohdjyp",
+      "scene_id": "scn_hostelroom3f",
+      "name": "Window",
+      "category": "window",
+      "aliases": [
+        "Windows",
+        "Fresh air"
+      ],
+      "position": {
+        "x": 3.0,
+        "y": 1.6,
+        "z": -0.25
+      },
+      "approach": {
+        "x": 2.379,
+        "z": -0.234
+      }
+    },
+    {
+      "schema_version": 1,
+      "poi_id": "poi_hckrhwt3tzgn",
+      "scene_id": "scn_hostelroom3f",
+      "name": "Bunk 1",
+      "category": "sleep",
+      "aliases": [
+        "Bed 1",
+        "Bunk bed",
+        "Bed by the door",
+        "Sleep"
+      ],
+      "position": {
+        "x": -2.5,
+        "y": 1.2,
+        "z": 0.5
+      },
+      "approach": {
+        "x": -1.721,
+        "z": 0.266
+      }
+    },
+    {
+      "schema_version": 1,
+      "poi_id": "poi_76ppgwupkiwn",
+      "scene_id": "scn_hostelroom3f",
+      "name": "Bunk 2",
+      "category": "sleep",
+      "aliases": [
+        "Bed 2",
+        "Bunk bed",
+        "Bed by the window",
+        "Sleep"
+      ],
+      "position": {
+        "x": 0.9,
+        "y": 1.2,
+        "z": 0.5
+      },
+      "approach": {
+        "x": 0.129,
+        "z": 0.466
+      }
+    },
+    {
+      "schema_version": 1,
+      "poi_id": "poi_4p67p4hug7n3",
+      "scene_id": "scn_hostelroom3f",
+      "name": "Desk 1",
+      "category": "study",
+      "aliases": [
+        "Study desk",
+        "Desk",
+        "Lamp desk",
+        "Study"
+      ],
+      "position": {
+        "x": -0.3,
+        "y": 1.0,
+        "z": 1.15
+      },
+      "approach": {
+        "x": 0.079,
+        "z": 0.566
+      }
+    },
+    {
+      "schema_version": 1,
+      "poi_id": "poi_rw7mftgnku4l",
+      "scene_id": "scn_hostelroom3f",
+      "name": "Desk 2",
+      "category": "study",
+      "aliases": [
+        "Desk by the bunk",
+        "Study table"
+      ],
+      "position": {
+        "x": 1.6,
+        "y": 1.0,
+        "z": 0.55
+      },
+      "approach": {
+        "x": 2.129,
+        "z": 0.516
+      }
+    },
+    {
+      "schema_version": 1,
+      "poi_id": "poi_dhkxfnc7htgg",
+      "scene_id": "scn_hostelroom3f",
+      "name": "Table",
+      "category": "table",
+      "aliases": [
+        "Dining table",
+        "Table with bottles"
+      ],
+      "position": {
+        "x": -1.5,
+        "y": 1.0,
+        "z": 1.0
+      },
+      "approach": {
+        "x": -1.521,
+        "z": 0.316
+      }
+    },
+    {
+      "schema_version": 1,
+      "poi_id": "poi_uad6xmwkd3a2",
+      "scene_id": "scn_hostelroom3f",
+      "name": "Cupboard 1",
+      "category": "storage",
+      "aliases": [
+        "Cupboards",
+        "Wardrobe",
+        "Almirah",
+        "Storage"
+      ],
+      "position": {
+        "x": -1.0,
+        "y": 1.2,
+        "z": -1.6
+      },
+      "approach": {
+        "x": -0.871,
+        "z": -1.084
+      }
+    },
+    {
+      "schema_version": 1,
+      "poi_id": "poi_pmiwu47zceyd",
+      "scene_id": "scn_hostelroom3f",
+      "name": "Cupboard 2",
+      "category": "storage",
+      "aliases": [
+        "Cupboards",
+        "Wardrobe",
+        "Almirah",
+        "Shelves"
+      ],
+      "position": {
+        "x": 1.3,
+        "y": 1.2,
+        "z": -1.6
+      },
+      "approach": {
+        "x": 1.279,
+        "z": -1.084
+      }
+    }
+  ]
+}

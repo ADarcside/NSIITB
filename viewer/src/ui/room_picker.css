@@ -1,0 +1,38 @@
+/* Room picker: a quiet dropdown under the search box (search results open over it) */
+.room-picker {
+  position: absolute;
+  top: calc(var(--ns-hud-top) + var(--ns-target) + 14px);
+  left: var(--ns-hud-left);
+  z-index: 80;
+  padding: 0 4px 0 12px;
+  gap: 6px;
+  pointer-events: auto;
+  cursor: pointer;
+}
+.room-picker-k {
+  font-size: var(--ns-fs-sm);
+  font-weight: 700;
+  letter-spacing: var(--ns-label-ls);
+  text-transform: uppercase;
+}
+.room-picker-select {
+  min-height: var(--ns-target);
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--ns-radius-sm);
+  background: transparent;
+  color: var(--ns-accent);
+  font: inherit;
+  font-size: var(--ns-fs-sm);
+  font-weight: 700;
+  cursor: pointer;
+}
+.room-picker-select:focus-visible { outline: 2px solid var(--ns-accent); outline-offset: 1px; }
+.room-picker-select option { color: #111; background: #fff; }
+@media (hover: hover) {
+  .room-picker:hover { background: var(--ns-surface-hover); }
+}
+/* Tag mode's panel and a selected place's card own the left edge on small screens */
+@media (max-width: 640px) {
+  html:has(.nav-poi-card:not(.hidden)) .room-picker { display: none; }
+}
