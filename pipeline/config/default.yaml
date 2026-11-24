@@ -74,7 +74,7 @@ floor:                        # floor backing in S06 (pipeline/floor.py): clears
   max_hole_pct: 0.05
 
 floor_paint:                  # floor repaint in S06 (pipeline/floor_paint.py): paints the floor sheet from the photos
-  enabled: true               # needs <run>/frames; skipped without them
+  enabled: false              # SAFE ZONE: painted sheet off (rules: no painting)
   paint_step_m: 0.007
   paint_sigma_m: 0.005
   occluder_opacity: 0.5       # solid splats above the floor that hide it from a photo
