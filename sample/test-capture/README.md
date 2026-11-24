@@ -5,8 +5,8 @@ This folder is the sample data for the repo. It holds the real room we reconstru
 | File | What it is |
 |---|---|
 | `scn_hostelroomac/manifest.json` | the scene manifest written by S08: asset hashes, metric transform, start pose, room bounds |
-| `scn_hostelroomac/full.spz` | the full Gaussian splat, 2,005,123 Gaussians, 45 MB (S07) |
-| `scn_hostelroomac/lite.spz` | the phone version, top 12% of Gaussians, 5 MB (S07) |
+| `scn_hostelroomac/full.spz` | the full Gaussian splat, 1,881,439 Gaussians, 40 MB (S07) |
+| `scn_hostelroomac/lite.spz` | the phone version, 564,432 Gaussians, 12 MB (S07) |
 | `scn_hostelroomac/grid.json` | the 5 cm walkable collision grid with 28 height layers (S06) |
 | `pois.json` | Round 2: the 14 tagged places (name, category, aliases, position, standing spot). Same file as on the live `/round2/` site. |
 

@@ -33,7 +33,7 @@ Our first real space is one of our own hostel rooms, K-720, bunks and all, filme
 
 Laptops load the full scene straight away; phones start with a lighter version so the first view arrives fast on mobile data. Walls, beds and bunk posts are solid, and you can fly up with **E** to look over the top bunk.
 
-**One room so far.** Rounds 1 and 2 show one complete room: all four walls, floor, ceiling and furniture. For a space with several rooms on one floor, the plan is one continuous walk through the doorways, run through the same pipeline as a single scene; we have not tested that on a real multi-room space yet. Separate floors are not joined: today each floor would be its own scene with its own link.
+**Two rooms.** The Round 2 site shows two real rooms, K-720 and Room 3, each with all four walls, floor, ceiling and furniture. Room 3 (6.05 × 3.40 × 2.61 m) went through the same pipeline with no changes, and a **Room** menu under the search box switches between them. For a space with several rooms on one floor, the plan is one continuous walk through the doorways, run through the same pipeline as a single scene; we have not tested that on a real multi-room space yet. Separate floors are not joined: today each floor would be its own scene with its own link.
 
 ## Round 2: find a place, follow the path
 
@@ -63,7 +63,7 @@ The Round 1 link above stays as it was submitted.
 - **Voice guide:** when a route starts, a voice says where you are going, how far it is, each turn before you reach it ("In 4 metres, turn left."), the distance left and when you arrive. The same words show as a line under the route card, so it works on mute too. The speaker button on the route card turns the voice off and on. It uses the browser's built-in speech, so nothing extra loads from a server. Code: [`tour_guide.ts`](viewer/src/nav/tour_guide.ts), [`voice_guide.ts`](viewer/src/nav/voice_guide.ts), [`speaker.ts`](viewer/src/nav/speaker.ts).
 - **Floor-plan minimap** (`N`): the room footprint, every POI, you, and your route.
 - **Stray splats trimmed automatically:** a filter in S06 removes floaters but keeps every splat the room needs to stay solid, checked from every walkable spot ([pipeline/floaters.py](pipeline/floaters.py)).
-- **Clean floor:** S06 puts an opaque sheet under the floor, removes the blobs below it without opening holes, and repaints the floor from the capture photos ([pipeline/floor.py](pipeline/floor.py), [pipeline/floor_paint.py](pipeline/floor_paint.py)).
+- **Automatic clean-up only:** nothing in a scene is painted, added or moved by hand. Besides the floater filter, a photo-checked fixer removes only splats that held-out photos show are not there (code: `pipeline/autofix.py` in the [aR repository](https://github.com/ADarcside/aR)). Room 3 was also trained with an anti-fog setting so that haze becomes real surfaces.
 - **Tagging in minutes:** open the viewer with `?tag=1`, walk to a spot, press `P`, type a name. Export `pois.json` and attach it to the scene with `python -m pipeline.pois attach <scene_dir> pois.json`. To move a tag, press `T` (Adjust mode) and drag its label or its minimap dot. A tag can sit anywhere, even on a bunk, and its route ends at the closest floor spot. Fourteen places took us a few minutes.
 - **Rearrange furniture** (in the **…** menu): slide and rotate furniture in your own browser, and the floor grid, paths and distances follow the new layout. The owner can save a layout for everyone from tag mode.
 
@@ -307,7 +307,7 @@ npx vite preview --outDir site      # optional local check of the built site
 
 We host it on GitHub Pages from a separate repository ([ADarcside/namma-space](https://github.com/ADarcside/namma-space)) that holds only the built site: push the contents of `site/` to the `main` branch root of that repository, with Pages set to serve from `main` / root.
 
-**Public Round 2 viewer: https://adarcside.github.io/namma-space/round2/** (hostel room K-720 with places, search and paths). The Round 1 viewer stays at https://adarcside.github.io/namma-space/ .
+**Public Round 2 viewer: https://adarcside.github.io/namma-space/round2/** (two hostel rooms, K-720 and Room 3, with places, search and paths; pick the room in the Room menu). The Round 1 viewer stays at https://adarcside.github.io/namma-space/ .
 
 ---
 
@@ -341,6 +341,7 @@ On Windows, run the Python parts inside WSL and open the repo from WSL in VS Cod
 | `multiplayer/` | the room relay (Cloudflare Worker) and the editable avatar `.blend` files; `tools/avatars/` builds the characters |
 | `tests/` | pytest and Vitest suites; `tests/fixtures/` has template JSON files |
 | `sample/test-capture/` | sample data: the published K-720 scene (manifest, full and lite SPZ, walkable grid), see its README |
+| `sample/room3-capture/` | sample data: the published Room 3 scene, see its README |
 | `docs/sop.md`, `docs/field-checklist.md` | how to capture |
 | `docs/round2.md` | how the spatial index, search and pathfinding work |
 | `docs/decisions/` | short records of tool and format decisions |
