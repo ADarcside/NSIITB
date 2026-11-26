@@ -1,51 +1,56 @@
-# Capture SOP (v1.6)
+# Capture SOP (v1.8)
 
 This is how one person with one phone captures an indoor space so the pipeline can turn it into a walkable 3D scene. It is written to be repeated on an unseen venue under time pressure, so every step is short and has a reason.
 
 The goal is **one continuous video of one still, well-lit room**, plus **three tape-measured room dimensions**. Everything else is optional backup.
 
+**Which plan:** at the Round 3 finale or any unseen venue, use the **finale plan (section 2.3, 15 to 20 min of filming)**. The full plan (section 2.2, 30 to 35 min) is for practice rooms where time does not matter.
+
 | | |
 |---|---|
-| Time on site | full plan: about 45 min (5 setup, 30 to 35 filming, 5 checks); quick plan: about 25 min |
+| Time on site | finale plan: about 35 min (3 walk-through, 7 setup, 15 to 20 filming, 5 checks); full plan: about 45 min |
 | People | 1 operator (a second person helps keep the room clear and measures) |
-| Kit | phone with at least 25 GB free and a full battery, tape measure (5 m or longer) or laser meter, masking tape and a marker, this SOP and the [field checklist](field-checklist.md) |
+| Kit | phone with at least 25 GB free and a full battery, tape measure (5 m or longer) or laser meter, masking tape and a marker, a few matte objects or sticky notes for plain walls, this SOP and the [field checklist](field-checklist.md) |
 | Output | `room.mov` (original file, not converted) and `capture.json` |
 
 Version history is at the bottom.
 
 ---
 
-## 1. Before filming (5 min)
+## 1. Before filming (10 min)
 
-1. **Consent.** Get the space owner's permission and write down a short reference, for example `k720-own-room-2026-10-25`. It goes in `capture.json`.
-2. **Clear the room.** No people or pets in shot. Close swinging doors and cupboards. Put away anything that will move (fans off, curtains still).
-3. **Light it.** Turn every light on. Draw curtains on windows with direct sun, because bright glare and dark corners both reconstruct badly.
-4. **Reduce trouble surfaces.** Mirrors, glass and screens confuse the reconstruction. Cover a mirror with a sheet if you can, and turn screens off.
-5. **Tape marks (backup scale, 2 min).** Stick two pairs of masking-tape crosses on the floor where the walk path will see them:
+1. **Walk the venue first (3 min, no filming).** List the places people will search for (rooms, desks, exits, notice boards). Those are the POIs you will tag, and each gets close passes in the finale plan (pass 9). Note plain walls, mirrors, glass, backlit windows and anything that will move. At a busy venue, ask the organisers for a quiet slot and film when nobody is walking through.
+2. **Consent.** Get the space owner's permission and write down a short reference, for example `k720-own-room-2026-10-25`. It goes in `capture.json`.
+3. **Clear the room.** No people or pets in shot. Close swinging doors and cupboards. Put away anything that will move (fans off, curtains still).
+4. **Light it.** Turn every light on, with no very dark corners (room 2 lost frames in its darkest pass). Draw curtains or lower blinds on windows with direct sun or a bright view behind them: a backlit window turns into haze (Room 3).
+5. **Reduce trouble surfaces.** Mirrors, glass and screens confuse the reconstruction. Cover a mirror with a sheet if you can, and turn screens off.
+6. **Give plain walls something to hold on to (if the venue allows).** Long bare walls, ceilings and floors reconstruct as cloud and let the model stretch. Put a few distinct matte objects (a bag, a box, a poster) along each bare wall, or 6 to 10 sticky notes or tape crosses at chest height and near the ceiling edge. Avoid shiny objects. Leave them in place until filming ends, then take them away.
+7. **Tape marks (backup scale, 2 min).** Stick two pairs of masking-tape crosses on the floor where the walk path will see them:
    - A to B exactly **2.000 m** apart, along the main walking line.
    - C to D exactly **1.000 m** apart, roughly at right angles to A–B.
 
-   Label the crosses A, B, C, D with a marker and take one photo of the tape measure along each pair. The pipeline currently takes scale from the room measurements (step 4.3), and the tape pairs are the fallback and a cross-check.
-6. **Phone settings.**
+   Label the crosses A, B, C, D with a marker and take one photo of the tape measure along each pair. Also tape and write down two more distances as checks: **door to the far wall**, and **one large piece of furniture** (for example a table's length). The pipeline currently takes scale from the room measurements (step 4.3), and the tape pairs are the fallback and a cross-check.
+8. **Phone settings.**
    - Charge to 100 % (or carry a power bank), free at least 25 GB, turn on Do Not Disturb.
-   - iPhone: Camera > Video, **4K, 30 fps**, 1x lens, no zoom. Action mode, Cinematic and Night mode off. Settings > Camera > Formats: "Most Compatible" is fine.
+   - iPhone: Camera > Video, **4K, 30 fps**, 1x lens, no zoom. Action mode, Cinematic and Night mode off. Settings > Camera > Formats: "Most Compatible" is fine. Settings > Camera > Record Video: **HDR Video off**, so brightness stays steady. Use the stock Camera app.
    - Android: rear main camera, 4K 30 fps, stabilisation on, no zoom, no beauty or AI scene modes.
    - Hold the phone in **landscape**. Before pressing record, touch and hold a mid-grey patch of wall until **AE/AF Lock** appears, so brightness and focus stay fixed.
 
-## 2. Filming (one continuous video, 30 to 35 min)
+## 2. Filming (one continuous video: 15 to 20 min finale plan, 30 to 35 min full plan)
 
-Do not stop and restart the recording. Pausing is fine; cutting is not. A 35 min 4K video is 12 to 20 GB, so free at least **25 GB** on the phone and start with a full battery (or a power bank).
+Do not stop and restart the recording. Pausing is fine; cutting is not. A 20 min 4K video is about 7 to 12 GB and a 35 min one 12 to 20 GB, so free at least **25 GB** on the phone and start with a full battery (or a power bank).
 
-### 2.1 The four rules that matter most for Gaussian splatting
+### 2.1 The five rules that matter most for Gaussian splatting
 
 1. **Move your feet, not your wrist.** The reconstruction gets depth from the phone *changing position* between frames. Turning on the spot gives no depth and leaves floaters. Except for the start and end pans, always walk while you film.
 2. **Slow and steady.** In the full plan walk at about **0.2 m/s (one small step every 1.5 s)** and turn no faster than **10° per second** (a full circle in at least 36 s). Each second of video should still show about three quarters of what the previous second showed.
 3. **Every surface 4 times, from 4 different places** (heights or angles). More passes from *new positions* is what makes a long video worth it; repeating the same path at the same height adds little.
 4. **Keep your distance.** Never get closer than **0.5 m** to anything (it goes out of focus and loses context), and don't film anything only from farther than about **5 m**.
+5. **Vary the viewing direction.** Don't only walk forward and back along the room looking where you walk: that gives almost no depth along the walking line, and room 2 came out 1.3 to 2x too long. Walk **sideways (crabwise) along each long wall facing the opposite wall**, take **wide shots from both ends** that show the whole room, and circle objects in **inward arcs** with the phone aimed at the object.
 
 Phone height names used below: **high** = arms up above your head, about 1.9 m; **chest** = about 1.3 m; **waist** = about 0.9 m; **low** = crouching, about 0.5 m.
 
-### 2.2 Full plan: hostel room K-720 (6.4 × 3.9 m, bunks), 30 to 35 min
+### 2.2 Full plan (practice rooms): hostel room K-720 (6.4 × 3.9 m, bunks), 30 to 35 min
 
 Do the passes in this order. "Lap" means once round the whole room (about 20 m, about 2 min at this speed). K-720 is narrow, so "far side" shots are taken **along the length** of the room (6.4 m), and side walls are filmed from across the aisle.
 
@@ -69,34 +74,41 @@ Do the passes in this order. "Lap" means once round the whole room (about 20 m, 
 
 If you finish under 30 min, you walked too fast: do lap 3 again at half the speed rather than adding new paths.
 
-### 2.3 Quick plan (any room, 12 to 15 min)
+### 2.3 Finale plan (any room, 15 to 20 min)
 
-For the live finale or a quick re-capture. Same rules, but walk at **0.3 m/s** and do **3 passes** per surface.
+For the live finale, any unseen venue, or a quick re-capture. Same rules, but walk at about **0.3 m/s** and do **2 to 3 passes** per surface. Frame budget stays the same as the full plan (1,200 to 1,400 kept frames), so the shorter video mainly saves filming time and copying time.
 
 | # | Part | Distance | Passes | How | About |
 |---|---|---|---|---|---|
-| 1 | Start pan | on mark A | 1 | Full circle, chest height | 30 s |
-| 2 | Whole room, looking across | far side 3 to 5 m away | 3 laps | Back to the walls, facing across: chest level, chest up 30°, waist down 30° | 3 to 4 min |
-| 3 | Walls, close | 1.0 to 1.5 m | 2 laps | Facing the wall: chest level, waist down 30 to 45° | 2 to 3 min |
-| 4 | Corners | 1.5 m back | 3 sweeps | Level, up, down, with side steps | 1 to 2 min |
-| 5 | Ceiling | about 1.3 m | 2 lines | Straight up, then 45° toward the wall tops | 1 min |
-| 6 | Floor | about 1 m ahead | 2 sets | Waist, aimed 1 m ahead (never at your feet), along then across | 1 min |
-| 7 | Furniture | 1.0 to 1.5 m | 3 heights | Arcs at chest, high looking down, low looking up | 1 to 3 min |
-| 8 | Inside and under things | 0.5 to 1.0 m | 1 or 2 | Crouch and slide past | 1 min |
-| 9 | Doors and windows | 0.7 to 1.0 m | 1 arc | 60°, angled across bright windows | 30 s |
-| 10 | Tape marks | 1 to 2 m | 2 angles | Usually covered by pass 3 | 15 s |
-| 11 | End pan | on mark A | 1 | Same as the start | 30 s |
+| 1 | **Start at the door** | in the doorway | 1 | Hold still 3 s looking in. Then a **5 s wide shot** showing the whole room, far end in frame. | 15 s |
+| 2 | Start pan | on mark A | 1 | Full circle, chest height, level | 30 s |
+| 3 | **Sideways along each long wall** | as far back as the room allows | 2 per long wall | Back to one long wall, face the opposite wall, crab-walk the full length; then swap sides. Chest level, then waist tilted down 30° | 3 to 4 min |
+| 4 | **Wide shot from the far end** | at the far end | 1 | Hold still 5 s with the **door end in frame**, then turn slowly to the side walls | 15 s |
+| 5 | Walls, close | 1.0 to 1.5 m | 2 laps | Facing the wall: chest level, then high tilted up 30° (wall tops, ceiling edge) | 2 to 3 min |
+| 6 | Corners | 1.5 m back, on the diagonal | 3 sweeps | Level, up, down, with small side steps | 1 to 2 min |
+| 7 | **Look-up pass (ceiling)** | phone high | 2 lines | Walk **slowly**: straight up, then 45° toward the wall tops. Include lights and fans (fans off) | 1 to 2 min |
+| 8 | Floor | about 1 m ahead | 2 lines | Waist, aimed 1 m ahead (never at your feet), along then across | 1 min |
+| 9 | **POIs and furniture** | 1.0 to 1.5 m | 3 heights | **Inward arcs** around each place you will tag and each large piece: chest, high looking down, waist. Film the floor around movable pieces too | 2 to 4 min |
+| 10 | Inside and under things | 0.5 to 1.0 m | 1 or 2 | Crouch and slide past, some of the room in the frame edge | 1 min |
+| 11 | Doors and windows | 0.7 to 1.0 m | 1 arc | 60° arc, **side-on**. Film the door edges and top from inside. Never a long look out of the door or straight at a bright window | 30 s |
+| 12 | Tape marks | 1 to 2 m | 2 angles | Chest height tilted down, from two sides | 15 s |
+| 13 | **End at the door** | on mark A, then the doorway | 1 | Repeat the start pan, walk back to the doorway, hold still 3 s | 45 s |
+| | **Total** | | | | **15 to 20 min** |
+
+If a pass goes wrong (feet in shot, thumb over the lens, someone walks in), say "skip" and the time out loud, keep the recording going, and redo the pass. Write the times down so that area can be checked in the model.
 
 ### 2.4 Throughout the video
 
 - Hold the phone with **both hands**, elbows tucked in, in **landscape**. Use the **1x** lens only. Never zoom, never change settings, never cover the lens.
+- **Watch the AE/AF Lock label.** If it disappears (a tap or a long pause can release it), pause, touch and hold the same mid-grey wall patch again, then carry on. Steady exposure matters: Room 3 needed extra training work to undo brightness changes.
+- **No long looks out of the room.** Whatever shows through the door, a window or a mirror ends up in the model and confuses the wall finder (room 2). Glance past, don't stare.
 - When you change height or tilt between laps, do it slowly over two or three steps, not with a jerk.
 - **Keep yourself out of shot.** Your feet, shoes and shadow move with you and turn into dark see-through blobs just above the floor. Never point the phone straight down at your feet, and keep the main light behind the phone.
 - **Close windows** before filming so curtains and loose fabric stay still.
 - In a long shoot, rest your arms between passes **by pausing, not by lowering the phone fast or stopping the recording**. Hold still for a few seconds, then carry on.
-- If something moves (a person walks in, a curtain swings), say the time out loud on the video or note it, and film that area again before you finish.
+- If something moves (a person walks in, a curtain swings) or your feet or thumb get in shot, say the time out loud on the video or note it, and film that area again before you finish.
 - **For moving furniture later:** film the floor and the wall behind each piece that may be moved (around and between legs, and the wall strip just above it) from at least two angles. The viewer fills a moved piece's old spot from the floor and wall around it, so those must be in the scan. After publishing, open tag mode, then Layout, then Fix boxes, and check each furniture box (about 5 min).
-- The room config samples 3 frames per second (about 6,300 from 35 min) and keeps the sharpest 1,000 to 1,200. Slower walking means more of those frames are sharp, which is why the long plan is slower, not just longer.
+- The room config takes 2 candidate frames per second (about 2,400 from 20 min, 4,200 from 35 min), drops blurry ones and keeps 1,200 to 1,400 spread over the whole video. Slower walking means more of those frames are sharp.
 
 ## 3. Optional second clip (3 to 5 min)
 
@@ -109,7 +121,7 @@ If the playback check in step 4 shows a weak area, film a short separate clip of
 3. **Measure the room.** These three numbers set the scale of the model, so measure carefully, wall to wall at floor level:
    - **length** (long axis), **width** (short axis), **height** (floor to ceiling).
    - Measure each twice. If the two readings differ by more than 2 cm, measure a third time.
-4. **Write down** the device model and OS version, the time you started filming, the lighting ("all room lights on, curtains drawn"), and anything odd (a mirror, a person walked through at 6:40).
+4. **Write down** the device model and OS version, the time you started filming, the lighting ("all room lights on, curtains drawn"), the two check distances (door to far wall, one furniture size), any skip times, and anything odd (a mirror, a person walked through at 6:40).
 5. **Sketch the floor plan (2 min).** On one sheet of paper, draw the room from above. It does not need to be to scale, but it must show:
    - the outline of the walls with the **length and width** written on them, and the **height** in a corner;
    - every **door and window**, and the large furniture (beds, tables, cupboards);
@@ -140,7 +152,7 @@ Copy `tests/fixtures/capture_valid.json` and edit it. Every field below is check
   "fps": 30.0,
   "captured_at": "2026-10-25T10:00:00Z",
   "operator": "Team Namma Space",
-  "sop_version": "v1.3.0",
+  "sop_version": "v1.8.0",
   "lighting": "All room lights on",
   "scale_pairs": [
     {"a": "A", "b": "B", "distance_m": 2.0, "role": "scale"},
@@ -188,10 +200,11 @@ Every stage has a measured pass/fail gate. A failed gate means reshoot or reproc
 - **Views below waist height** show the floor edge-on and look fuzzy, so the viewer limits eye height to 0.7 to 2.7 m.
 - **Under-filmed areas** (most often the ceiling and the wall you entered by) come out blotchy or missing. The ceiling passes exist for this reason.
 - **Moving furniture** shows only what was filmed. The old spot is filled with made-up floor and wall, and an object's unseen back or underside stays thin.
+- **People at a public venue.** You may not be able to clear an unseen venue. Film in a quiet slot, redo any pass someone walked through, and note the times.
 - **One room per scene so far.** For several rooms on one floor, the plan is one continuous walk through the doorways; this is not yet tested on a real multi-room space. Separate floors are not joined: each floor is its own scene.
 - The human steps are: consent, clearing the room, filming, measuring, the floor-plan sketch, the playback check, and the three visual checks at G3, G4 and G6. The rest is run by the pipeline.
 
-## 9. Lessons from the first real capture (hostel room K-720, 25 Oct 2026)
+## 9. Lessons from real captures
 
 - The 18 min walkthrough gave 800 usable frames, but parts of the room were seen from only one or two positions. v1.2 doubles the passes at a slower speed (30 to 35 min) for the reshoot.
 - The **ceiling was under-filmed**, which showed up as gaps and floaters above head height. Straight-up ceiling passes were added in v1.1.
@@ -199,6 +212,8 @@ Every stage has a measured pass/fail gate. A failed gate means reshoot or reproc
 - Cropping the splat at the walls opened black holes, because splat walls are partly see-through. The room config now keeps every Gaussian, and the viewer's room bounds and walkable grid keep visitors inside instead.
 
 - Reshoot (room_v2, 28 Oct): floor passes aimed straight down caught the operator's feet and shadow, which became dark blobs above the floor. The ceiling corner above the cupboards by the door, the shiny AC vent and the curtain stayed soft. v1.3 aims floor passes 1 m ahead and adds a trouble-spot pass.
+- Room 2 (narrow sharing room, 17 Nov, dropped): the model came out 1.3 to 2x too long along the room while width and height were right. Nearly every view looked along the walking line in a narrow room with plain walls, and nothing tied the two ends together. The run passed on a warning. v1.8 adds sideways passes, wide shots from both ends and texture on plain walls to the finale plan. Its darkest pass also lost frames (darkness, not blur). Lesson: number gates are not enough, always look at the model in the viewer.
+- Room 3 (19 Nov, 51 min): the backlit mesh window and shiny dark surfaces turned into haze, and brightness changed during the long walk. Two short windows had feet in shot and a thumb over the lens, left out of the run. v1.8 adds HDR video off, re-tapping the exposure lock, side-on windows and saying skip times out loud.
 
 ## 10. AR guide at a venue
 
@@ -226,10 +241,11 @@ The AR guide is a bonus on top of the 3D room. Skip this section if there is no 
 
 | Version | Date | Change |
 |---|---|---|
-| v1.0.0 | 24 Oct 2026 | First SOP, from the Round 1 master guide |
-| v1.4.0 | 15 Nov 2026 | Film the floor and wall behind movable furniture; check furniture boxes in tag mode after publishing |
+| v1.8.0 | 26 Nov 2026 | Finale plan (15 to 20 min, any room) replaces the quick plan: start and end at the door, wide shots from both ends, sideways passes along long walls, inward arcs around POIs, slow look-up pass. Walk the venue first; texture on plain walls; door and furniture check distances; HDR video off and re-tap the exposure lock; no long looks out of doors or at backlit windows; say skip times out loud. Frame numbers match the room config (2 per second, 1,200 to 1,400 kept). Lessons from rooms 2 and 3 |
 | v1.6.0 | 16 Nov 2026 | Floor-plan sketch before leaving the room (section 4, step 5); note on several rooms and floors |
 | v1.5.0 | 15 Nov 2026 | New section 10: setting up the AR guide at a venue (marks, build, QR sheet, phone steps) |
+| v1.4.0 | 15 Nov 2026 | Film the floor and wall behind movable furniture; check furniture boxes in tag mode after publishing |
 | v1.3.0 | 29 Oct 2026 | Floor passes aimed 1 m ahead (operator out of shot), trouble-spot pass (high corners, shiny vents, curtains), close windows, lessons from the room_v2 reshoot |
 | v1.2.0 | 27 Oct 2026 | Full 30 to 35 min plan for K-720 (4 passes per surface, 0.2 m/s); 12 to 15 min plan kept as the quick plan |
 | v1.1.0 | 27 Oct 2026 | Distance, pass count and method for each part of the room; added ceiling pass and "looking across" laps, made room measurements required (scale source), tape pairs become backup and check, timings and lessons from the K-720 capture |
+| v1.0.0 | 24 Oct 2026 | First SOP, from the Round 1 master guide |
