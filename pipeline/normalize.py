@@ -395,8 +395,18 @@ def strongest_layer(h: np.ndarray, lo: float, hi: float, bin_size: float, lowest
     return float(centres[int(np.argmax(hist))])
 
 
-def outer_walls(v: np.ndarray, bin_size: float, min_fraction: float = 0.25) -> Tuple[float, float]:
-    """Outermost strong peaks of a wall profile: the two room walls along this axis."""
+def outer_walls(v: np.ndarray, bin_size: float, min_fraction: float = 0.25,
+                walked: Optional[Tuple[float, float]] = None, clearance: float = 0.0,
+                side_fraction: float = 0.15) -> Tuple[float, float]:
+    """
+    Outermost strong peaks of a wall profile: the two room walls along this axis.
+
+    walked = (low, high) extent of the camera path on this axis (2nd/98th percentile). A wall found
+    inside the walked area, or less than clearance beyond it, cannot be the room wall: it is furniture
+    (a cupboard front, the end of a bed) that out-counts a sparsely seen real wall. That side then takes
+    the outermost peak beyond the walked area holding at least side_fraction of the strongest bin there.
+    A wall already clear of the walk is kept as before.
+    """
     lo, hi = np.percentile(v, 0.5), np.percentile(v, 99.5)
     pad = 0.05 * (hi - lo)  # walls sit at the extremes; keep them inside the profile
     lo, hi = lo - pad, hi + pad
@@ -405,4 +415,47 @@ def outer_walls(v: np.ndarray, bin_size: float, min_fraction: float = 0.25) -> T
     peaks = [i for i in range(1, len(hist) - 1) if strong[i] and hist[i] >= hist[i - 1] and hist[i] >= hist[i + 1]]
     if len(peaks) < 2:
         return float(lo), float(hi)
-    return float(centres[peaks[0]]), float(centres[peaks[-1]])
+    a, b = float(centres[peaks[0]]), float(centres[peaks[-1]])
+    if walked is None:
+        return a, b
+    w0, w1 = float(walked[0]), float(walked[1])
+    local = [i for i in range(1, len(hist) - 1) if hist[i] > 0 and hist[i] >= hist[i - 1] and hist[i] >= hist[i + 1]]
+
+    def beyond(outside: List[int], pick_outermost) -> Optional[float]:
+        if not outside:
+            return None
+        top = max(hist[i] for i in outside)
+        ok = [i for i in outside if hist[i] >= side_fraction * top]
+        return float(centres[pick_outermost(ok)]) if ok else None
+
+    if a > w0 - clearance:
+        a = beyond([i for i in local if centres[i] < w0], min) or a
+    if b < w1 + clearance:
+        b = beyond([i for i in local if centres[i] > w1], max) or b
+    return a, b
+
+
+# ---------------------------------------------------------------- shape checks
+
+def path_span_check(path_xz: np.ndarray, dims: Dict[str, Any], tol_pct: float = 5.0) -> Dict[str, Any]:
+    """
+    The walked camera path must fit inside the taped room. COLMAP can stretch a reconstruction
+    along one axis (forward/back walking in a narrow room) while reprojection stays low; the path
+    then spans more than the room (room 2: 8.4 m of path in a 4.76 m room).
+    Spans are measured along the path's own principal axes (2nd to 98th percentile), so no wall
+    detection is needed, and compared with the longer and shorter taped room sides.
+    """
+    xz = np.asarray(path_xz, dtype=np.float64)
+    centred = xz - xz.mean(axis=0)
+    _, _, vt = np.linalg.svd(centred, full_matrices=False)
+    proj = centred @ vt.T
+    spans = np.percentile(proj, 98, axis=0) - np.percentile(proj, 2, axis=0)
+    long_side = max(float(dims["length"]), float(dims["width"]))
+    short_side = min(float(dims["length"]), float(dims["width"]))
+    limits = (long_side * (1 + tol_pct / 100.0), short_side * (1 + tol_pct / 100.0))
+    over = [k for k, s, lim in (("long", spans[0], limits[0]), ("short", spans[1], limits[1])) if s > lim]
+    return {
+        "path_span_m": {"long": round(float(spans[0]), 3), "short": round(float(spans[1]), 3)},
+        "path_span_limit_m": {"long": round(limits[0], 3), "short": round(limits[1], 3)},
+        "path_span_over": over,
+    }

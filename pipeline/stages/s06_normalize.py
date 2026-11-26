@@ -7,7 +7,9 @@ SPEC Section 6 (S6):
 - With a measured room size the walls are found, yaw is snapped to them, and cleanup + viewer bounds
   stop at the walls
 - Cleanup removes Gaussians only (opacity, scale outliers, outside room box + pad); never rotates the PLY
-- Gate G6: floor RMS <= max_floor_rms_m and scale check error <= max_scale_error_pct
+- Gate G6: floor RMS <= max_floor_rms_m and scale check error <= max_scale_error_pct; with a taped room
+  size, the size estimates agree within room_dims_warn_pct (room_dims_gate) and the walked camera
+  path fits inside the room (path_gate)
 Inputs found in the run dir: newest exported PLY, colmap/sparse/0/*.txt,
 Nerfstudio dataparser_transforms.json, optional marks_2d.json.
 """
@@ -220,7 +222,12 @@ def run_s06_normalize(
             r = nz.yaw_rotation(yaw) @ r
             m = nz.build_world_from_splat(r, scale, origin)
             wv = nz.apply(m, xyz[mid])
-            walls_xz = {ax: list(nz.outer_walls(wv[:, ax], 0.02 * cam_y)) for ax in (0, 2)}
+            # A wall inside the walked area is furniture (room 3: a cupboard front and a bed end were taken
+            # for walls); outer_walls then looks beyond the walk on that side
+            wcv = nz.apply(m, path_cams)
+            walked = {ax: tuple(np.percentile(wcv[:, ax], [2, 98])) for ax in (0, 2)}
+            walls_xz = {ax: list(nz.outer_walls(wv[:, ax], 0.02 * cam_y, walked=walked[ax], clearance=0.1 * cam_y))
+                        for ax in (0, 2)}
             span = {ax: walls_xz[ax][1] - walls_xz[ax][0] for ax in (0, 2)}
             length_axis = 0 if span[0] >= span[2] else 2
             estimates = {
@@ -253,6 +260,41 @@ def run_s06_normalize(
                 else:
                     walls_xz = None
     world_cams = nz.apply(m, centers)
+
+    # Shape checks. A smooth stretch along one axis in the COLMAP poses keeps reprojection low,
+    # so S03 cannot see it (room 2, 17 Nov: 1.8x along the length, width and height correct).
+    # Both checks need the taped room size; "warn" lets a venue continue on purpose.
+    shape_errors: List[str] = []
+    shape_metrics: Dict[str, Any] = {}
+    dims_gate = str(n_cfg.get("room_dims_gate", "fail")).lower()
+    dims_limit = float(n_cfg.get("room_dims_warn_pct", 5.0))
+    dims_pct = room_metrics.get("room_dims_check_pct")
+    if dims_pct and max(dims_pct.values()) > dims_limit:
+        msg = (f"Room sizes disagree: {', '.join(f'{k} {v:.1f}%' for k, v in dims_pct.items())} "
+               f"from their median (limit {dims_limit}%); the model is stretched or the walls are wrong")
+        shape_metrics["room_dims_gate"] = dims_gate
+        if dims_gate == "fail":
+            shape_errors.append(msg)
+        else:
+            print(f"[s06_normalize WARNING] {msg}; room_dims_gate is 'warn', continuing.")
+    dims_all = capture.get("room_dims_m") or {}
+    if all(k in dims_all for k in ("length", "width")) and len(path_cams) >= 10:
+        path_gate = str(n_cfg.get("path_gate", "fail")).lower()
+        span = nz.path_span_check(nz.apply(m, path_cams)[:, [0, 2]], dims_all, float(n_cfg.get("path_span_tol_pct", 5.0)))
+        shape_metrics.update(span)
+        shape_metrics["path_gate"] = path_gate
+        if span["path_span_over"]:
+            msg = (f"Camera path spans {span['path_span_m']['long']} x {span['path_span_m']['short']} m, more than the "
+                   f"taped room allows ({span['path_span_limit_m']['long']} x {span['path_span_limit_m']['short']} m); "
+                   f"the poses are stretched or the scale is wrong")
+            if path_gate == "fail":
+                shape_errors.append(msg)
+            else:
+                print(f"[s06_normalize WARNING] {msg}; path_gate is 'warn', continuing.")
+    if pairs and not scale_pair:
+        shape_metrics["tape_check"] = "not run: no marks_2d.json (python -m pipeline.tools.marks)"
+    elif scale_pair:
+        shape_metrics["tape_check"] = "scale pair used" + (", check pair measured" if check_pair else ", no check pair")
 
     floor_rms_m = floor["rms"] * scale
     world_xyz = nz.apply(m, xyz)
@@ -300,7 +342,7 @@ def run_s06_normalize(
         if grid_meta["grid_free_m2"] >= min_free:
             doc = {k: grid_meta[k] for k in ("cell_m", "origin", "width", "height", "agent_radius_m")}
             doc["free_bits_b64"] = navgrid.encode_free_bits(free)
-            layers_cfg = grid_cfg.get("layers", {})
+            layers_cfg = navgrid.layers_for_room(grid_cfg.get("layers", {}), room_box["max"][1] if room_box else None)
             if layers_cfg.get("enabled", True):
                 occ, layer_meta = navgrid.build_layers(world_xyz, opacity, grid_meta, bounds_xz, layers_cfg)
                 doc["layers"] = {k: layer_meta[k] for k in ("y0_m", "dy_m", "count")}
@@ -339,7 +381,8 @@ def run_s06_normalize(
             free1 = navgrid.decode_free_bits(nav_doc["free_bits_b64"], nav_doc["width"], nav_doc["height"])
             f_stats["grid_free_cells_differing"] = int((free1 != free2).sum()) if free2.shape == free1.shape else -1
             if nav_doc.get("layers"):
-                occ2, _ = navgrid.build_layers(world_xyz[keep], opacity[keep], meta2, bounds_xz, grid_cfg.get("layers", {}))
+                occ2, _ = navgrid.build_layers(world_xyz[keep], opacity[keep], meta2, bounds_xz,
+                                                 navgrid.layers_for_room(grid_cfg.get("layers", {}), room_box["max"][1] if room_box else None))
                 lay = nav_doc["layers"]
                 occ1 = fl.decode_bits(lay["occupied_bits_b64"], lay["count"] * nav_doc["width"] * nav_doc["height"]).reshape(occ2.shape)
                 f_stats["grid_layer_cells_differing"] = int((occ1 != occ2).sum())
@@ -347,6 +390,8 @@ def run_s06_normalize(
         clean_stats["kept"] = int(keep.sum())
     # Floor backing (pipeline/floor.py): opaque sheet under the floor, below-floor blobs removed with the put-back check
     floor_rows = None
+    floor_lite = None
+    cams = None
     fb_cfg = config.get("floor", {})
     if fb_cfg.get("enabled", False) and nav_doc is not None:
         from pipeline import floaters as fl
@@ -363,16 +408,24 @@ def run_s06_normalize(
             f_keep, f_p, f_col, fp_stats = fp.floor_paint(scene, f_keep, nav_doc, cams, r_dir / "frames", f_p, f_col, fp_cfg)
             sheet_cfg = fp.sheet_config(fp.merged_config(fp_cfg))
             floater_metrics["floor_paint"] = fp_stats
+            if fp_stats.get("status") == "skipped_clean":
+                # The splat floor already matches the photos: no sheet and no below-floor removals either
+                # (removals without the sheet can open holes; floor.py step 1 alone adds dark smudges)
+                f_keep = np.ones(len(kept_idx), dtype=bool)
+                f_p, f_col = np.zeros((0, 3)), np.zeros((0, 3))
+                fb_stats = {**fb_stats, "status": "skipped_clean", "removed": 0}
         keep = np.zeros(len(data), dtype=bool)
         keep[kept_idx[f_keep]] = True
         floor_rows = fb.backing_rows(f_p, f_col, names, m, sheet_cfg) if len(f_p) else None
         if floor_rows is not None:
-            # S07 keeps the sheet out of the Lite ranking and appends this coarser copy instead
-            np.savez(r_dir / "floor_backing_lite.npz", full_rows=len(floor_rows),
-                     rows=fb.lite_backing_rows(f_p, f_col, names, m, sheet_cfg))
+            floor_lite = fb.lite_backing_rows(f_p, f_col, names, m, sheet_cfg)
         floater_metrics["floor"] = {k: v for k, v in fb_stats.items() if not k.startswith("per_view")}
         clean_stats["kept"] = int(keep.sum())
-    if floor_rows is None and (r_dir / "floor_backing_lite.npz").exists():
+    if floor_rows is not None:
+        # The sheets (floor, ceiling, walls) are the last rows of clean.ply. S07 keeps them out of the Lite ranking and
+        # appends this coarser copy instead
+        np.savez(r_dir / "floor_backing_lite.npz", full_rows=len(floor_rows), rows=floor_lite)
+    elif (r_dir / "floor_backing_lite.npz").exists():
         (r_dir / "floor_backing_lite.npz").unlink()
     write_ply_subset(ply_path, clean_path, data, keep)
     if floor_rows is not None:
@@ -397,6 +450,7 @@ def run_s06_normalize(
         **clean_stats,
         **floor_metrics,
         **room_metrics,
+        **shape_metrics,
         "bounds_xz": bounds_xz,
         **grid_metrics,
         **floater_metrics,
@@ -438,7 +492,9 @@ def run_s06_normalize(
         errors.append(f"Floor RMS {floor_rms_m:.4f} m > {max_rms} m")
     if scale_check_error_pct is not None and scale_check_error_pct > max_scale_err:
         errors.append(f"Scale check error {scale_check_error_pct:.2f}% > {max_scale_err}%")
-    threshold = {"max_floor_rms_m": max_rms, "max_scale_error_pct": max_scale_err}
+    errors.extend(shape_errors)
+    threshold = {"max_floor_rms_m": max_rms, "max_scale_error_pct": max_scale_err,
+                 "room_dims_max_pct": dims_limit, "path_span_tol_pct": float(n_cfg.get("path_span_tol_pct", 5.0))}
     if errors:
         fail(metrics, threshold, "; ".join(errors), metrics)
 

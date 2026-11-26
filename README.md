@@ -33,7 +33,7 @@ Our first real space is one of our own hostel rooms, K-720, bunks and all, filme
 
 Laptops load the full scene straight away; phones start with a lighter version so the first view arrives fast on mobile data. Walls, beds and bunk posts are solid, and you can fly up with **E** to look over the top bunk.
 
-**Two rooms.** The Round 2 site shows two real rooms, K-720 and Room 3, each with all four walls, floor, ceiling and furniture. Room 3 (6.05 × 3.40 × 2.61 m) went through the same pipeline with no changes, and a **Room** menu under the search box switches between them. For a space with several rooms on one floor, the plan is one continuous walk through the doorways, run through the same pipeline as a single scene; we have not tested that on a real multi-room space yet. Separate floors are not joined: today each floor would be its own scene with its own link.
+**Two rooms.** The Round 2 site shows two real rooms, K-720 and Room 3, each with all four walls, floor, ceiling and furniture. Room 3 (6.05 × 3.40 × 2.61 m) went through the same pipeline code with its own config ([`pipeline/config/room3/lab_dense_antifog.yaml`](pipeline/config/room3/lab_dense_antifog.yaml): more frames, an anti-fog training setting and two skipped clips where a foot and a thumb were in shot), then the photo-checked fixer ([`pipeline/autofix.py`](pipeline/autofix.py)). A **Room** menu under the search box switches between them. For a space with several rooms on one floor, the plan is one continuous walk through the doorways, run through the same pipeline as a single scene; we have not tested that on a real multi-room space yet. Separate floors are not joined: today each floor would be its own scene with its own link.
 
 ## Round 2: find a place, follow the path
 
@@ -53,7 +53,7 @@ The Round 1 link above stays as it was submitted.
 | Criterion | Where to see it live | Where it is in the code |
 |---|---|---|
 | **Spatial indexing & POI tagging** | 14 places in 6 categories float over the room; the minimap (`N`) shows them on the floor plan. Open the site with `?tag=1` and press `P` to tag a place. | Walkable floor grid, connected areas and clearance in [`astar.ts`](viewer/src/nav/astar.ts); places in [`pois.ts`](viewer/src/nav/pois.ts) and [`pois.schema.json`](pipeline/schemas/pois.schema.json); attach with [`pipeline/pois.py`](pipeline/pois.py). Explained in [docs/round2.md](docs/round2.md#the-spatial-index). |
-| **Pathfinding accuracy** | Search a place and pick it: the gold path bends around the bunks and keeps clear of furniture. **Take me there** walks it. The voice guide calls out each turn and the arrival. Routes to all 14 places and all 182 place-to-place pairs are found. | A* with a clearance cost and string pulling in [`astar.ts`](viewer/src/nav/astar.ts); tests in [`nav.test.ts`](tests/viewer/nav.test.ts) and [`k720_tags.test.ts`](tests/viewer/k720_tags.test.ts). |
+| **Pathfinding accuracy** | Search a place and pick it: the gold path bends around the bunks and keeps clear of furniture. **Take me there** walks it. The voice guide calls out each turn and the arrival. Routes to all 14 places and all 182 place-to-place pairs are found. | A* with a clearance cost and string pulling in [`astar.ts`](viewer/src/nav/astar.ts); tests in [`nav.test.ts`](tests/viewer/nav.test.ts), [`k720_tags.test.ts`](tests/viewer/k720_tags.test.ts) and [`room3_tags.test.ts`](tests/viewer/room3_tags.test.ts) (all 72 Room 3 place-to-place routes). |
 | **Search UI & transition** | Press `/`. Each result shows its walking distance from you; try "dor" (typo), "almirah" (alias) or "sleep" (nearest bunk first). Picking a result turns the camera smoothly to the place and draws the route. | [`search.ts`](viewer/src/nav/search.ts), [`nav_ui.ts`](viewer/src/ui/nav_ui.ts), labels in [`route_view.ts`](viewer/src/nav/route_view.ts). |
 | **Code cleanliness & repo setup** | CI badge above: typecheck, viewer tests, build and pipeline tests on every push. | [Run it yourself](#1-try-the-viewer-no-gpu) needs no GPU; [repository layout](#6-repository-layout). |
 
@@ -63,9 +63,9 @@ The Round 1 link above stays as it was submitted.
 - **Voice guide:** when a route starts, a voice says where you are going, how far it is, each turn before you reach it ("In 4 metres, turn left."), the distance left and when you arrive. The same words show as a line under the route card, so it works on mute too. The speaker button on the route card turns the voice off and on. It uses the browser's built-in speech, so nothing extra loads from a server. Code: [`tour_guide.ts`](viewer/src/nav/tour_guide.ts), [`voice_guide.ts`](viewer/src/nav/voice_guide.ts), [`speaker.ts`](viewer/src/nav/speaker.ts).
 - **Floor-plan minimap** (`N`): the room footprint, every POI, you, and your route.
 - **Stray splats trimmed automatically:** a filter in S06 removes floaters but keeps every splat the room needs to stay solid, checked from every walkable spot ([pipeline/floaters.py](pipeline/floaters.py)).
-- **Automatic clean-up only:** nothing in a scene is painted, added or moved by hand. Besides the floater filter, a photo-checked fixer removes only splats that held-out photos show are not there (code: `pipeline/autofix.py` in the [aR repository](https://github.com/ADarcside/aR)). Room 3 was also trained with an anti-fog setting so that haze becomes real surfaces.
+- **Automatic clean-up only:** nothing in a scene is painted, added or moved by hand. Besides the floater filter, a photo-checked fixer removes only splats that held-out photos show are not there (code: [`pipeline/autofix.py`](pipeline/autofix.py), run as its own command after S06; it is not part of the default S01–S08 run). Room 3 was also trained with an anti-fog setting so that haze becomes real surfaces.
 - **Tagging in minutes:** open the viewer with `?tag=1`, walk to a spot, press `P`, type a name. Export `pois.json` and attach it to the scene with `python -m pipeline.pois attach <scene_dir> pois.json`. To move a tag, press `T` (Adjust mode) and drag its label or its minimap dot. A tag can sit anywhere, even on a bunk, and its route ends at the closest floor spot. Fourteen places took us a few minutes.
-- **Rearrange furniture** (in the **…** menu): slide and rotate furniture in your own browser, and the floor grid, paths and distances follow the new layout. The owner can save a layout for everyone from tag mode.
+- **Rearrange furniture** (in the **…** menu): slide and rotate furniture in your own browser, and the floor grid, paths and distances follow the new layout. This is a visitor feature in the browser: it never changes the published scene files. The owner can save a layout for everyone from tag mode (a separate `layout.json`); none is saved on the live site.
 
 The local steps in [Try the viewer](#1-try-the-viewer-no-gpu) attach the tags to the sample room, so they show without extra URL options.
 
@@ -85,7 +85,7 @@ scripts/build_site.sh <scene_dir> site
 
 ### Extra: AR guide on the phone (Round 3 bonus)
 
-An Android phone with Chrome and ARCore can follow a route through its camera: gold arrows on the floor, a floating pin over the place, an arrow at the screen edge when the target is out of view, a buzz and a spoken line on arrival, and English or Hindi hints. On the live site, open a place, tap **Navigate**, close the place card and tap **AR** on the route card. The button shows only on phones that support WebXR AR.
+An Android phone with Chrome and ARCore can follow a route through its camera: gold arrows on the floor, a floating pin over the place, an arrow at the screen edge when the target is out of view, a buzz and a spoken line on arrival, and English or Hindi hints. On the live site, open a place, tap **Navigate**, close the place card and tap **AR** on the route card. The button shows only on phones that support WebXR AR. **Not yet tested on an ARCore phone:** we have no ARCore device, so the AR page is checked with tests and desktop emulation only.
 
 - **Alignment:** two tape crosses on the floor about 2 m apart, tagged in tag mode as `Mark 1A` and `Mark 1B`. In AR you tap the two crosses. Marks never show to visitors.
 - **Ways in:** the **AR** button, a direct link `ar.html?to=<place id>`, or the printable QR sheet at [`ar.html?qr=1`](https://adarcside.github.io/namma-space/round2/ar.html?qr=1).
@@ -136,7 +136,7 @@ All of this went back into the [SOP](docs/sop.md), which is written to be repeat
 
 ## 1. Try the viewer (no GPU)
 
-Needs **Node 22.12 or newer** and **Python 3.10+** with NumPy and jsonschema (`pip install numpy jsonschema`), to build a small synthetic test room and attach the tags.
+Needs **Node 22.12 or newer** and **Python 3.10+** with NumPy and jsonschema (`pip install numpy jsonschema`; the full pipeline and tool versions are pinned in [`requirements-tools.txt`](requirements-tools.txt)), to build a small synthetic test room and attach the tags.
 
 ```bash
 git clone -b round-2 https://github.com/ADarcside/NSIITB.git aR
@@ -255,7 +255,7 @@ python -c "import json,jsonschema;jsonschema.validate(json.load(open('sample/roo
 ```
 
 ### 3.3 Run S01 → S08
-Use `pipeline/config/room.yaml` for a full room or a long walkthrough (3 candidate frames per second, keeps the sharpest 1,000–1,200, 30,000 training steps). `pipeline/config/default.yaml` is a lighter profile (200–400 frames).
+Use `pipeline/config/room.yaml` for a full room or a long walkthrough (2 candidate frames per second, keeps the sharpest 1,200–1,400, 30,000 training steps). `pipeline/config/default.yaml` is a lighter profile (200–400 frames).
 
 ```bash
 source ~/ns_env.sh && export PATH="$PATH:$HOME/aR/notebooks/ns-env/bin"
@@ -265,7 +265,18 @@ nohup setsid python -u -m pipeline.run_pipeline \
   --run-dir runs/room_v1 --config pipeline/config/room.yaml \
   --max-width 1920 > runs/room_v1/run.log 2>&1 &
 ```
-`nohup setsid` keeps the run alive if the terminal closes. On an RTX A4000 a 15 to 18 min room video takes about 3 hours end to end; COLMAP and training can print nothing for long stretches, which is normal.
+`nohup setsid` keeps the run alive if the terminal closes. Measured on an RTX A4000 with exhaustive matching: K-720 took 7.4 h end to end (COLMAP 4.2 h) and Room 3 12.5 h (COLMAP 4.7 h). A shorter finale video and sequential matching are faster, but we have not timed a full finale run yet. COLMAP and training can print nothing for long stretches, which is normal.
+
+COLMAP runs SIFT on the CPU by default (`colmap: use_gpu: false`), because COLMAP's GPU SIFT (SiftGPU) has a non-commercial licence. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+**Per-run settings.** A video with a few bad seconds (a foot or a thumb in shot) can drop them with `frames: skip_ranges: ["33:41-33:49"]` in a copy of the config. S06 stops the run when the three tape-based scale estimates disagree by more than 5 % (`room_dims_gate: fail`) or when the walked camera path does not fit inside the taped room (`path_gate: fail`).
+
+**Optional photo-checked fixer (after S06).** It renders the model from the held-out photos and removes only clusters of splats that the photos show are not there:
+```bash
+python -m pipeline.autofix judge --ply runs/room_v1/clean.ply --transform runs/room_v1/transform.json \
+  --colmap runs/room_v1/colmap/sparse/0 --frames runs/room_v1/frames --out runs/room_v1/autofix
+```
+It never adds anything; `python -m pipeline.autofix restore` puts removed clusters back. Both live rooms used it.
 
 - Progress: `tail -5 runs/room_v1/run.log` and the newest file in `runs/room_v1/logs/`.
 - Finished when `pgrep -f run_pipeline` prints nothing. The last lines of `run.log` are a table of every stage and gate.
@@ -305,6 +316,8 @@ npx vite preview --outDir site      # optional local check of the built site
 ```
 `site/` holds `index.html`, `assets/` and `<scene_id>/`. The scene opens by default (no `?scene=` needed), and all paths are relative, so the site works from a sub-path such as GitHub Pages. Local test scenes in `viewer/public/` are left out.
 
+**Several rooms on one site.** The Room menu reads `rooms.json` next to the scene folders (see [`room_picker.ts`](viewer/src/ui/room_picker.ts)), for example `{"schema_version": 1, "rooms": [{"scene_id": "scn_hostelroomac", "name": "K-720"}, {"scene_id": "scn_hostelroom3f", "name": "Room 3"}]}`. Build the site with the first scene, copy each further `<scene_id>/` folder next to it, and add a row per room to `rooms.json`. With no `rooms.json` the menu is hidden.
+
 We host it on GitHub Pages from a separate repository ([ADarcside/namma-space](https://github.com/ADarcside/namma-space)) that holds only the built site: push the contents of `site/` to the `main` branch root of that repository, with Pages set to serve from `main` / root.
 
 **Public Round 2 viewer: https://adarcside.github.io/namma-space/round2/** (two hostel rooms, K-720 and Room 3, with places, search and paths; pick the room in the Room menu). The Round 1 viewer stays at https://adarcside.github.io/namma-space/ .
@@ -332,7 +345,8 @@ On Windows, run the Python parts inside WSL and open the repo from WSL in VS Cod
 |---|---|
 | `pipeline/run_pipeline.py` | the orchestrator, S01–S08 |
 | `pipeline/stages/` | one file per stage |
-| `pipeline/config/` | `default.yaml`, `room.yaml` (thresholds and stage settings; the hash is recorded in every report) |
+| `pipeline/config/` | `default.yaml`, `room.yaml`, `room_sharp.yaml` (thresholds and stage settings; the hash is recorded in every report); `room3/` holds the configs that made Room 3 |
+| `pipeline/floaters.py`, `pipeline/autofix.py`, `pipeline/colmap_prune.py` | automatic clean-up: the floater filter (S06), the photo-checked fixer (own command) and dropping wild COLMAP cameras (S03); all only remove |
 | `pipeline/schemas/` | JSON schemas for `capture.json`, `manifest.json`, the navigation grid and `pois.json` |
 | `pipeline/pois.py` | attach and check a scene's places (`pois.json`) |
 | `viewer/` | the browser viewer (TypeScript, Three.js, Spark, Vite) |
@@ -351,16 +365,16 @@ On Windows, run the Python parts inside WSL and open the repo from WSL in VS Cod
 
 ## 7. Who made this
 
-We're **team NoGrass**: **Satvik Garg** and **Aditya Gupta**, two students at VIT Vellore, building this for the Namma Space challenge at Techfest, IIT Bombay. K-720 is one of our own hostel rooms, which made it the obvious first test subject.
+We're **team NoGrass**: **Satvik Garg** and **Aditya Gupta**, two students at VIT Vellore, building this for the Namma Space challenge at Techfest, IIT Bombay. K-720 and Room 3 are our own hostel rooms (filmed with the occupants' consent), which made them the obvious first test subjects.
 
-**Built with.** Namma Space stands on COLMAP, Nerfstudio and gsplat, PyTorch, Three.js, Spark, PlayCanvas splat-transform, OpenCV, NumPy and more. Every dependency and its licence is in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). We also leaned on AI coding assistants for much of the code and docs. The filming, the measuring, and the calls on what to ship were ours.
+**Built with.** Namma Space stands on COLMAP, Nerfstudio and gsplat, PyTorch, Three.js, Spark, PlayCanvas splat-transform, OpenCV, NumPy and more. Every dependency and its licence is in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). AI coding assistants helped us write and review code and docs. The filming, the measuring, and the calls on what to ship were ours.
 
 **Services and cost.** Namma Space calls no paid API. Reconstruction runs on our own GPU, and everything a visitor touches is a static file or a free service:
 
 | Job | What we use | Cost |
 |---|---|---|
-| Reconstruction (COLMAP, Splatfacto) | self-hosted: one lab PC with an NVIDIA RTX A4000 (16 GB), about 7.4 h for K-720 | no API fee; about 1 to 2 kWh of electricity per room |
-| Hosting the viewer and scene | GitHub Pages (static files) | free |
+| Reconstruction (COLMAP, Splatfacto) | self-hosted: one lab PC with an NVIDIA RTX A4000 (16 GB), about 7.4 h for K-720 and 12.5 h for Room 3 | no API fee; about 1 to 2 kWh of electricity per room |
+| Hosting the viewer and scene | GitHub Pages (static project hosting) | free |
 | Multiplayer relay | Cloudflare Workers, free plan (about 100,000 requests a day; an hour with six people is roughly 15,000) | free |
 | Voice chat connection | public STUN servers (Cloudflare, Google); voice goes browser to browser | free |
 | Voice guide | the browser's built-in speech, no text-to-speech API | free |

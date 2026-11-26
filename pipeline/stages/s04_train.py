@@ -79,7 +79,7 @@ def verify_coordinate_frame(
 def execute_ns_train(
     cmd: List[str],
     log_dir: Path,
-    timeout_s: int = 6 * 3600,
+    timeout_s: Optional[float] = None,
 ) -> Tuple[bool, int, str]:
     """
     Executes ns-train CLI command logging stdout/stderr to runs/<id>/logs/ns_train.log.
@@ -117,7 +117,7 @@ def execute_ns_eval(
     config_yml: Path,
     metrics_path: Path,
     log_dir: Path,
-    timeout_s: int = 3 * 3600,
+    timeout_s: Optional[float] = None,
 ) -> bool:
     """
     Runs ns-eval on the held-out frames so S04 has a PSNR to gate on.
@@ -161,6 +161,8 @@ def run_s04_train(
     iterations = int(t_cfg.get("iterations", 30000))
     holdout_every = int(t_cfg.get("holdout_every", 8))
     model_args = [str(a) for a in (t_cfg.get("model_args") or [])]
+    # no time limit by default (owner, 23 Nov: a 6 h cap killed a slower anti-fog run at 97.8%); train.timeout_s sets one
+    timeout_s = float(t_cfg["timeout_s"]) if t_cfg.get("timeout_s") else None
 
     active_trainer = trainer or SplatfactoTrainer()
 
@@ -175,7 +177,7 @@ def run_s04_train(
 
     # Real Executor: if ns-train is on PATH and we are not using a MockTrainer
     if execute_training and not isinstance(active_trainer, MockTrainer) and shutil.which("ns-train"):
-        success, retcode, log_content = execute_ns_train(cmd, log_dir=logs)
+        success, retcode, log_content = execute_ns_train(cmd, log_dir=logs, timeout_s=timeout_s)
         if not success:
             active_trainer.handle_cuda_oom(log_content)
             fail_gate(
@@ -188,7 +190,7 @@ def run_s04_train(
             )
         cfg_yml = latest_nerfstudio_config(out_dir)
         if cfg_yml and shutil.which("ns-eval"):
-            execute_ns_eval(cfg_yml, out_dir / "metrics.json", log_dir=logs)
+            execute_ns_eval(cfg_yml, out_dir / "metrics.json", log_dir=logs, timeout_s=timeout_s)
 
     # 1. PSNR evaluation
     metrics = active_trainer.parse_metrics(output_dir)

@@ -166,10 +166,12 @@ def build_run(tmp_path, pts_world, sizes=None, cam_radius=(1.0, 1.2)):
 
 def quick_floor(cfg_path, tmp_path):
     """The config with a coarse floor backing check (fewer views, smaller renders, 3 cm sheet) so CI stays fast.
-    The full-quality check runs on real scenes; here it only has to run and keep its contract."""
+    The full-quality check runs on real scenes; here it only has to run and keep its contract.
+    The backing is off in every shipped config (rules: removal only), so the test turns it on here."""
     text = Path(cfg_path).read_text()
     a = text.index("\nfloor:")
     b = text.index("\n\n", a)
+    text = text[:a] + text[a:b].replace("  enabled: false", "  enabled: true", 1) + text[b:]
     text = text[:b] + ("\n  view_step_m: 2.0\n  heights_m: [1.5]\n  render_px: 64\n  backing_step_m: 0.03"
                        "\n  backing_sigma_m: 0.021") + text[b:]
     out = Path(tmp_path) / f"quick_{Path(cfg_path).name}"
@@ -178,6 +180,17 @@ def quick_floor(cfg_path, tmp_path):
 
 
 DEFAULT_CFG = Path(__file__).resolve().parents[2] / "pipeline" / "config" / "default.yaml"
+
+
+def test_floor_backing_is_off_in_every_shipped_config():
+    """Rules: automatic clean-up may only remove splats, so the added floor sheet stays off by default."""
+    from pipeline.common import load_config
+    cfgs = sorted((DEFAULT_CFG.parent).rglob("*.yaml"))
+    assert cfgs
+    for cfg in cfgs:
+        data, _ = load_config(cfg)
+        assert not data.get("floor", {}).get("enabled", False), cfg.name
+        assert not data.get("floor_paint", {}).get("enabled", False), cfg.name
 
 
 @pytest.fixture
@@ -262,6 +275,8 @@ def test_s06_measured_room_scale_walls_and_bounds(tmp_path):
     assert met["room_dims_check_pct"]["length"] < 2.0
     assert met["room_dims_check_pct"]["width"] < 2.0
     assert "room_dims_warning" not in met
+    # The walked path fits inside the taped room (path_gate)
+    assert met["path_span_over"] == []
 
     b = tr["bounds"]
     spans = sorted([b["maxX"] - b["minX"], b["maxZ"] - b["minZ"]])

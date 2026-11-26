@@ -50,7 +50,7 @@ class Builder:
         return fl.Scene(p, np.concatenate(self.o), s, fl.covariances(q, s), np.vstack(self.c)), np.array(self.tag)
 
 
-def room(window=False, table=False, big_fog=False):
+def room(window=False, table=False, big_fog=False, solid_blob=False, stool=False, shelf=False):
     b = Builder()
     gap = (-0.4, 0.4, 0.8, 1.6) if window else None
     for sign in (-1, 1):
@@ -80,6 +80,15 @@ def room(window=False, table=False, big_fog=False):
     b.add(rng.normal([0.3, 1.2, 0.3], 0.01, (30, 3)), [0.015, 0.015, 0.015], 0.6, [1, 0, 0], "blob")
     # a wisp of fog over the walkway
     b.add(rng.normal([-0.2, 0.9, 0.3], 0.03, (12, 3)), [0.03, 0.03, 0.03], 0.15, [0.9, 0.9, 1.0], "fog")
+    if solid_blob:
+        # an opaque 20 cm cluster floating at chest height in the walkway, touching nothing (a training blob)
+        b.add(rng.normal([0.5, 1.2, -0.5], 0.05, (600, 3)), [0.02, 0.02, 0.02], 0.98, [0.8, 0.7, 0.5], "solid_blob")
+    if stool:
+        # a stool seat 0.45 m up whose thin legs don't register in the grid: must stay
+        b.add(rng.normal([-0.6, 0.45, -0.6], [0.08, 0.02, 0.08], (400, 3)), [0.02, 0.02, 0.02], 0.98, [0.3, 0.2, 0.1], "stool")
+    if shelf:
+        # a box on a wall shelf at 1.3 m, sticking 0.3 m out of the +x wall, its bracket too thin to register
+        b.add(rng.normal([HALF - 0.15, 1.3, 0.0], [0.08, 0.05, 0.08], (400, 3)), [0.02, 0.02, 0.02], 0.98, [0.2, 0.5, 0.2], "shelf")
     if big_fog:
         # a large cloud right in front of several viewpoints: removing it changes > 5% of those views
         b.add(rng.normal([-0.5, 0.9, 0.5], 0.08, (25, 3)), [0.08, 0.08, 0.08], 0.15, [0.9, 0.9, 1.0], "cloud")
@@ -172,10 +181,11 @@ def test_verify_gate_puts_back_a_rule_that_changes_too_much():
     grid = make_grid(scene)
     keep, stats = fl.filter_floaters(scene, grid, CFG, TOP, log=lambda *a: None)
     assert stats["status"] == "PASS"
-    assert stats["verify_first"]["changed_pct_max"] > 5.0
-    assert "walk_fog" in stats["verify_retried_rules"]
+    # the first verify fails in the views right next to the cloud; only removals seen there go back
+    first = stats["verify_local_repair"][0] if "verify_local_repair" in stats else stats["verify_first"]
+    assert first["changed_pct_max"] > 5.0
     assert keep[tag == "cloud"].all() and stats["verify"]["changed_pct_max"] <= 5.0
-    assert not keep[tag == "faint"].any()  # other rules are untouched
+    assert keep[tag == "faint"].mean() < 0.1  # other removals stay (only those seen right next to the cloud go back)
 
 
 def test_disabled_keeps_everything():
@@ -197,3 +207,39 @@ def test_ply_round_trip(tmp_path):
     assert fl.write_ply(src, tmp_path / "b.ply", d, keep) == 3
     d2, _ = fl.read_ply(tmp_path / "b.ply")
     assert np.array_equal(d2, data[keep])
+
+
+def test_one_bad_view_does_not_throw_away_every_removal():
+    scene, tag = room(big_fog=True)
+    grid = make_grid(scene)
+    keep, stats = fl.filter_floaters(scene, grid, CFG, TOP, log=lambda *a: None)
+    assert stats["status"] == "PASS" and stats["removed"] > 0
+    assert "verify_local_repair" in stats
+    assert not keep[tag == "junk"].any() and keep[tag == "blob"].mean() < 0.1 and keep[tag == "faint"].mean() < 0.1
+
+
+def test_floating_solid_cluster_is_removed_and_furniture_stays():
+    scene, tag = room(solid_blob=True, table=True, stool=True, shelf=True)
+    grid = make_grid(scene)
+    keep, stats = fl.filter_floaters(scene, grid, {**CFG, "unsupported": True, "unsupported_max_fraction": 1.0}, TOP,
+                                    log=lambda *a: None)  # a tiny test scene: the share cap is for real scenes
+    assert stats["status"] == "PASS"
+    assert keep[tag == "solid_blob"].mean() < 0.05, keep[tag == "solid_blob"].mean()
+    assert keep[tag == "shoe"].all() and keep[tag == "table"].all()
+    assert keep[tag == "stool"].all() and keep[tag == "shelf"].all()
+    assert stats["unsupported_check"]["passed"]
+    assert len(stats["unsupported_clusters"]["clusters"]) == 1
+
+
+def test_floating_cluster_rule_is_off_by_default():
+    scene, tag = room(solid_blob=True)
+    grid = make_grid(scene)
+    keep, stats = fl.filter_floaters(scene, grid, CFG, TOP, log=lambda *a: None)
+    assert keep[tag == "solid_blob"].all() and "unsupported_check" not in stats
+
+
+def test_floating_cluster_cap_keeps_everything():
+    scene, tag = room(solid_blob=True)
+    grid = make_grid(scene)
+    keep, stats = fl.filter_floaters(scene, grid, {**CFG, "unsupported": True}, TOP, log=lambda *a: None)
+    assert stats["unsupported_clusters"]["capped"] and keep[tag == "solid_blob"].all()

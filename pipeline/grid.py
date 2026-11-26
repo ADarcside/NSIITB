@@ -135,6 +135,15 @@ def build_free_mask(
     return free, meta
 
 
+def layers_for_room(cfg: Dict[str, Any], room_height_m: Optional[float], tall_room_m: float = 3.2) -> Dict[str, Any]:
+    """Flying layers reach the ceiling of a tall room (a hall): top_m becomes the room height when the room is
+    taller than tall_room_m. Ordinary rooms keep the configured top_m, so their grid stays exactly as before."""
+    out = dict(cfg)
+    if room_height_m is not None and room_height_m > tall_room_m:
+        out["top_m"] = max(float(cfg.get("top_m", 2.9)), float(room_height_m))
+    return out
+
+
 def build_layers(world_xyz: np.ndarray, opacity: np.ndarray, meta: Dict[str, Any], bounds: Dict[str, float],
                  cfg: Dict[str, Any]) -> Tuple[np.ndarray, Dict[str, Any]]:
     """Returns (occupied [layers, height, width] bool, layer metadata) on the same cells as build_free_mask."""

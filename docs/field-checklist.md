@@ -11,7 +11,7 @@ Full steps and reasons: [docs/sop.md](sop.md).
 - [ ] Room clear of people and pets. Doors and cupboards closed. Fans off.
 - [ ] All lights on, no dark corners. Windows closed (curtains still). Blinds down on sunny or backlit windows. Mirrors covered, screens off.
 - [ ] Plain walls: matte objects or 6–10 sticky notes / tape crosses placed (if allowed)
-- [ ] Tape A–B = **2.000 m** along the walk line. Tape C–D = **1.000 m** across it. Labelled. Photo of the tape at each pair.
+- [ ] Tape A–B = **2.000 m** along the walk line. Tape C–D = **1.000 m** across it. Labelled, ArUco marker on each cross. Photo of the tape at each pair.
 - [ ] Check distances: door to far wall ________ m, furniture (________) ________ m
 - [ ] Phone 100 % charge (or power bank), ≥ 25 GB free, Do Not Disturb on.
 - [ ] Stock Camera app. Video **4K, 30 fps, 1x**, no zoom. **HDR Video off.** Action / Cinematic / Night off. Landscape.
@@ -72,11 +72,12 @@ Walk while you film (never just turn). 1 step every 1.5 s. Each surface 4 times.
 
 - [ ] Device model ______________  OS version ______________
 - [ ] Notes (mirror, glare, someone walked in): ________________________________
+- [ ] Skip times copied into `frames.skip_ranges` of the run config (if any)
 
 ## At the GPU machine
 
 - [ ] Video at `sample/<name>.mov`, not committed
 - [ ] `capture.json` filled and prints `capture OK`
 - [ ] Pipeline started (see README section 3)
-- [ ] S06 room sizes agree within 5 % (over 5 % = treat as a stop, the model is stretched)
+- [ ] S06 room sizes agree within 5 % (over 5 % = stop, the model is stretched)
 - [ ] Visual checks: G3 sparse cloud ☐  G4 renders ☐  G6 top/side views + navgrid.png ☐  model looked at in the viewer ☐

@@ -17,6 +17,12 @@ The splat floor is a soft average of many frames. The photos themselves show it 
      backing colour, matched in brightness.
   5. The thin floor skin (splats in floor_skin_m, thinner than skin_thick_m) is removed only where the photos
      painted the floor. Objects, legs and everything under the beds stay.
+  5b. Uneven floor (glare from a window on shiny tiles, shadows, blotches)? The big patches are evened out to the
+     floor's own median colour; fine detail like tile lines is kept (flatten, auto by measured unevenness).
+  6. Already clean? Before anything is replaced, the splat floor (top-down, from pipeline/floor.py) is compared
+     with the photo colours over the floor the photos saw: fine detail kept (high-pass ratio) and colour gap.
+     When the splat floor already matches the photos, nothing is repainted and S06 drops the floor step.
+     Every number here comes from the room's own photos and splats; there are no per-room colours.
 
 Command for an already published scene (after pipeline.floor):
   python -m pipeline.floor_paint --scene-dir <published dir> --floor-work <pipeline.floor work dir>
@@ -57,6 +63,20 @@ DEFAULTS: Dict[str, Any] = {
     "floor_skin_m": [-0.03, 0.02],
     "skin_thick_m": 0.01,
     "workers": 0,
+    "skip_if_clean": True,       # leave the floor alone when the splat floor already matches the photos
+    "clean_detail_ratio": 0.9,   # splat floor keeps at least this share of the photos' fine detail (high-pass std)
+    "clean_colour_gap": 0.025,   # and its smoothed colour is within this of the photos (median, 0-1 scale)
+                                 # K-720 (needed the repaint): detail 0.69, gap 0.040 -> repainted, well clear of both
+    "detail_sigma_m": 0.02,      # fine detail = features smaller than about this
+    "flatten": "off",            # off | on | auto: even out big glare patches and blotches in the painted floor
+                                 # (off by default until auto is measured on K-720, so existing scenes are unchanged)
+    "flatten_sigma_m": 0.2,      # "big" = smoother than this; tile lines and grout (smaller) are kept
+    "flatten_clip": 0.08,        # fine detail kept up to this much brighter/darker than its surroundings
+    "flatten_chroma_gap": 0.04,  # patches this far from the floor's own colour (a rug, a mat) are left alone
+    "flatten_colour": "keep",    # keep: colour casts stay (safe with rugs); even: also even out colour casts
+                                 # (window light, a coloured lamp) to the floor's own colour, for one-colour floors
+    "flatten_uneven": None,      # auto: flatten when unevenness (std / median of big-patch brightness) is above this;
+                                 # not calibrated yet, so auto does nothing until a number is set
 }
 
 
@@ -76,7 +96,9 @@ def world_cameras(run_dir: Path, world_from_splat: np.ndarray, splat_xyz: np.nda
     cams = parse_cameras_txt(sp / "cameras.txt")
     images = parse_images_txt(sp / "images.txt")
     pts = np.asarray([p["xyz"] for p in parse_points3D_txt(sp / "points3D.txt").values()])
-    dp_path = next(iter(sorted(run_dir.rglob("dataparser_transforms.json"))), None)
+    # the newest training run (a re-trained run keeps the old output folder; S06 picks the newest the same way)
+    found = sorted(run_dir.rglob("dataparser_transforms.json"), key=lambda p: p.stat().st_mtime)
+    dp_path = found[-1] if found else None
     if dp_path is None:
         raise FileNotFoundError(f"no dataparser_transforms.json under {run_dir}")
     t, s, frame, errs = nz.choose_colmap_frame(json.loads(dp_path.read_text()), pts, splat_xyz)
@@ -138,7 +160,7 @@ def _view(name: str):
     occ = a[np.clip((v[i] / div).astype(int), 0, h - 1), np.clip((u[i] / div).astype(int), 0, w - 1)]
     ray = p[i] - e
     dd = np.linalg.norm(ray, axis=1)
-    cos = np.abs(ray[:, 1]) / dd
+    cos = np.abs(ray[:, int(cfg.get("normal_axis", 1))]) / dd   # 1: floor/ceiling sheet, 0/2: wall sheets
     good = (occ < float(cfg["max_occlusion"])) & (cos > float(cfg["min_cos"]))
     i, occ, dd, cos, u, v = i[good], occ[good], dd[good], cos[good], u[i][good], v[i][good]
     if not len(i):
@@ -158,11 +180,15 @@ def sheet_points(grid: Dict[str, Any], cfg: Dict[str, Any]) -> Tuple[np.ndarray,
     return np.c_[xx.ravel(), np.full(xx.size, float(cfg["paint_y_m"])), zz.ravel()], (len(zs), len(xs))
 
 
-def paint_colours(scene: fl.Scene, keep: np.ndarray, grid: Dict[str, Any], cams: Dict[str, Any], frames: Path,
-                  cfg: Dict[str, Any], log=print) -> Tuple[np.ndarray, np.ndarray, Tuple[int, int]]:
-    """Sheet points, their photo colour, and which points the photos saw."""
-    p, shape = sheet_points(grid, cfg)
-    occ = keep & (scene.w[:, 1] > float(cfg["occluder_y_m"])) & (scene.op > float(cfg["occluder_opacity"]))
+def paint_colours(scene: fl.Scene, keep: np.ndarray, grid: Optional[Dict[str, Any]], cams: Dict[str, Any], frames: Path,
+                  cfg: Dict[str, Any], log=print, p: Optional[np.ndarray] = None, occ: Optional[np.ndarray] = None,
+                  shape: Optional[Tuple[int, int]] = None) -> Tuple[np.ndarray, np.ndarray, np.ndarray, Tuple[int, int]]:
+    """Sheet points, their photo colour, which points the photos saw, and the sheet shape.
+    p/occ/shape: another sheet and its occluders (pipeline/ceiling_paint.py); default the floor sheet over the grid."""
+    if p is None:
+        p, shape = sheet_points(grid, cfg)
+    if occ is None:
+        occ = keep & (scene.w[:, 1] > float(cfg["occluder_y_m"])) & (scene.op > float(cfg["occluder_opacity"]))
     _G.update(scene=scene, occ=occ, p=p, cams=cams, cfg=cfg, frames=Path(frames))
     names = sorted(n for n in cams["cams"] if (Path(frames) / n).exists())[::int(cfg["frame_every"])]
     fl.render(scene, (0, 1.5, 0), (1, 1.5, 0), (16, 16))  # compile before fork
@@ -170,7 +196,7 @@ def paint_colours(scene: fl.Scene, keep: np.ndarray, grid: Dict[str, Any], cams:
     workers = int(cfg["workers"]) or os.cpu_count() or 1
     with mp.get_context("fork").Pool(workers) as pool:
         out = [r for r in pool.imap_unordered(_view, names, chunksize=2) if r[1] is not None]
-    log(f"[floor_paint] {len(out)} of {len(names)} photos see the floor ({time.time() - t:.0f} s)")
+    log(f"[floor_paint] {len(out)} of {len(names)} photos see the sheet ({time.time() - t:.0f} s)")
     if not out:
         return p, np.zeros((len(p), 3)), np.zeros(len(p), bool), shape
     sm = float(np.median([r[1][3] for r in out]))
@@ -222,6 +248,45 @@ def finish_colours(p: np.ndarray, col: np.ndarray, seen: np.ndarray, shape: Tupl
     return np.clip(final, 0, 1).reshape(-1, 3), sm.ravel()
 
 
+def floor_unevenness(col: np.ndarray, shape: Tuple[int, int], cfg: Dict[str, Any]) -> float:
+    """Spread of the floor's large-scale brightness (std of the blurred luminance / median), away from the edges.
+    Glare patches, shadows and blotches raise it; an evenly lit floor (even a patterned one) keeps it low."""
+    gh, gw = shape
+    sg = float(cfg["flatten_sigma_m"]) / float(cfg["paint_step_m"])
+    lum = col.reshape(gh, gw, 3) @ np.array([0.299, 0.587, 0.114])
+    big = ndi.gaussian_filter(lum, sg, mode="nearest")
+    edge = max(1, int(round(sg)))
+    inner = big[edge:-edge, edge:-edge] if gh > 2 * edge + 4 and gw > 2 * edge + 4 else big
+    med = float(np.median(lum))
+    return round(float(inner.std() / max(med, 1e-3)), 4)
+
+
+def flatten_colours(col: np.ndarray, shape: Tuple[int, int], cfg: Dict[str, Any]) -> np.ndarray:
+    """Evens out the floor's large-scale brightness (glare, shadows, blotches) to its median brightness and keeps the
+    fine detail (tile lines), clipped to flatten_clip so sharp glare edges and dark spots don't come back.
+    Brightness only: colour (chroma) is kept, and patches whose colour differs from the floor's (a rug, a mat, a
+    different tile) are left alone, faded by flatten_chroma_gap."""
+    gh, gw = shape
+    sg = float(cfg["flatten_sigma_m"]) / float(cfg["paint_step_m"])
+    img = col.reshape(gh, gw, 3).astype(np.float64)
+    lum = img @ np.array([0.299, 0.587, 0.114])
+    big = ndi.gaussian_filter(lum, sg, mode="nearest")
+    c = float(cfg["flatten_clip"])
+    target = float(np.median(lum)) + np.clip(lum - big, -c, c)
+    chroma = img - lum[..., None]
+    big_chroma = np.stack([ndi.gaussian_filter(chroma[..., k], sg, mode="nearest") for k in range(3)], -1)
+    gap = np.linalg.norm(big_chroma - np.median(chroma.reshape(-1, 3), 0), axis=-1)
+    wgt = np.exp(-(gap / max(float(cfg["flatten_chroma_gap"]), 1e-6)) ** 2)   # 1 on the floor's own colour, ~0 on a rug
+    new_lum = wgt * target + (1 - wgt) * lum
+    if str(cfg.get("flatten_colour", "keep")).lower() == "even":
+        # one-colour floor: large-scale colour casts go to the floor's median colour, fine colour detail stays
+        med_c = np.median(chroma.reshape(-1, 3), 0)
+        chroma = med_c + np.clip(chroma - big_chroma, -c, c)
+        new_lum = target
+    out = chroma + new_lum[..., None]
+    return np.clip(out, 0, 1).reshape(-1, 3)
+
+
 def skin_mask(scene: fl.Scene, keep: np.ndarray, p: np.ndarray, painted: np.ndarray, shape: Tuple[int, int],
               cfg: Dict[str, Any]) -> np.ndarray:
     """Thin floor-surface splats lying where the photos painted the floor (to be replaced by the sheet)."""
@@ -244,16 +309,66 @@ def sheet_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
                              "backing_sigma_m": cfg["paint_sigma_m"]})
 
 
+def clean_check(col: np.ndarray, seen: np.ndarray, shape: Tuple[int, int], p: np.ndarray,
+                fallback_p: np.ndarray, fallback_col: np.ndarray, cfg: Dict[str, Any]) -> Dict[str, Any]:
+    """Compares the splat floor (top-down colours) with the photo colours where the photos saw the floor."""
+    gh, gw = shape
+    out: Dict[str, Any] = {"photo_floor_rgb": None, "splat_floor_rgb": None, "detail_ratio": None,
+                           "colour_gap": None, "clean": False}
+    if not seen.any() or not len(fallback_p):
+        return out
+    _, j = cKDTree(fallback_p[:, [0, 2]]).query(p[:, [0, 2]])
+    splat = fallback_col[j].reshape(gh, gw, 3)
+    photo = col.reshape(gh, gw, 3)
+    inner = ndi.binary_erosion(seen.reshape(gh, gw), iterations=3)
+    if inner.sum() < 100:
+        return out
+    sg = float(cfg["detail_sigma_m"]) / float(cfg["paint_step_m"])
+    lum = lambda im: im @ np.array([0.299, 0.587, 0.114])
+    def highpass(im):
+        g = lum(im)
+        m = inner.astype(float)
+        w = np.maximum(ndi.gaussian_filter(m, sg), 1e-6)
+        return g - ndi.gaussian_filter(g * m, sg) / w
+    hp_photo, hp_splat = highpass(photo)[inner], highpass(splat)[inner]
+    smooth = lambda im: np.stack([ndi.gaussian_filter(im[..., k], 3 * sg) for k in range(3)], -1)
+    gap = np.abs(smooth(photo) - smooth(splat))[inner].mean(-1)
+    out.update({
+        "photo_floor_rgb": [round(float(v), 3) for v in np.median(photo[inner], 0)],
+        "splat_floor_rgb": [round(float(v), 3) for v in np.median(splat[inner], 0)],
+        # a plain floor has no fine detail to keep: only the colour gap decides
+        "detail_ratio": 1.0 if hp_photo.std() < 0.005 else round(float(hp_splat.std() / hp_photo.std()), 3),
+        "colour_gap": round(float(np.median(gap)), 4),
+    })
+    out["clean"] = bool(out["detail_ratio"] >= float(cfg["clean_detail_ratio"])
+                        and out["colour_gap"] <= float(cfg["clean_colour_gap"]))
+    return out
+
+
 def floor_paint(scene: fl.Scene, keep: np.ndarray, grid: Dict[str, Any], cams: Dict[str, Any], frames: Path,
                 fallback_p: np.ndarray, fallback_col: np.ndarray, cfg: Optional[Dict[str, Any]] = None,
                 log=print) -> Tuple[np.ndarray, np.ndarray, np.ndarray, Dict[str, Any]]:
     """Returns (keep without the repainted skin, sheet points, sheet colours, stats)."""
     cfg = merged_config(cfg)
     p, col, seen, shape = paint_colours(scene, keep, grid, cams, frames, cfg, log)
+    check = clean_check(col, seen, shape, p, fallback_p, fallback_col, cfg)
+    log(f"[floor_paint] floor from photos rgb {check['photo_floor_rgb']}, splat floor rgb {check['splat_floor_rgb']}, "
+        f"detail kept {check['detail_ratio']}, colour gap {check['colour_gap']}")
+    if cfg["skip_if_clean"] and check["clean"]:
+        log("[floor_paint] splat floor already matches the photos: floor left as it is")
+        return keep, np.zeros((0, 3)), np.zeros((0, 3)), {"status": "skipped_clean", "check": check,
+                                                          "camera_frame": cams.get("frame")}
     final, painted = finish_colours(p, col, seen, shape, fallback_p, fallback_col)
+    uneven = floor_unevenness(final, shape, cfg)
+    mode = str(cfg["flatten"]).lower()
+    thr = cfg.get("flatten_uneven")
+    flat = mode == "on" or (mode == "auto" and thr is not None and uneven > float(thr))
+    if flat:
+        final = flatten_colours(final, shape, cfg)
     skin = skin_mask(scene, keep, p, painted, shape, cfg)
-    stats = {"sheet": int(len(p)), "painted_pct": round(100 * float(painted.mean()), 1),
-             "skin_removed": int(skin.sum()), "camera_frame": cams.get("frame")}
+    stats = {"status": "painted", "check": check, "sheet": int(len(p)), "painted_pct": round(100 * float(painted.mean()), 1),
+             "skin_removed": int(skin.sum()), "unevenness": uneven, "flattened": bool(flat),
+             "camera_frame": cams.get("frame")}
     log(f"[floor_paint] sheet {len(p)} points, {stats['painted_pct']}% painted from photos, "
         f"{stats['skin_removed']} floor-skin Gaussians replaced")
     return keep & ~skin, p, final, stats
@@ -282,6 +397,11 @@ def clean_published_scene(scene_dir: Path, floor_work: Path, run_dir: Path, out_
     log(f"[floor_paint] cameras: {len(cams['cams'])} ({cams['frame']}, mismatch {cams['frame_err']:.4f})")
     keep2, p, col, stats = floor_paint(scene, keep, grid, cams, run_dir / "frames", bk["p"], bk["col"], cfg, log)
     np.savez(work / "paint.npz", keep=keep2, p=p, col=col)
+    if stats.get("status") == "skipped_clean":
+        # floor already clean: publish the scene as it came in (no sheet, no below-floor removals)
+        stats.update(fl.write_published(scene_dir, out_dir, None, work))
+        (work / "stats.json").write_text(json.dumps(stats, indent=1))
+        return stats
     sc = sheet_config(cfg)
     clean = work / "full_clean.ply"
     fl.write_ply(floor_work / "full_in.ply", clean, data, keep2)

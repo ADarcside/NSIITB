@@ -10,7 +10,7 @@ This document registers all third-party software components, libraries, and tool
 | :--- | :--- | :--- | :--- |
 | **Nerfstudio** (1.1.5) | Apache-2.0 | Visual reconstruction (Splatfacto) | https://github.com/nerfstudio-project/nerfstudio |
 | **gsplat** (1.4.0) | Apache-2.0 | CUDA rasterizer under Splatfacto | https://github.com/nerfstudio-project/gsplat |
-| **COLMAP** (4.1.x) | BSD-3-Clause | Camera poses & sparse reconstruction (SfM) | https://github.com/colmap/colmap |
+| **COLMAP** (4.1.x) | BSD-3-Clause (see the SiftGPU note below) | Camera poses & sparse reconstruction (SfM) | https://github.com/colmap/colmap |
 | **pycolmap** (4.2.1) | BSD-3-Clause | Python bindings for COLMAP | https://github.com/colmap/pycolmap |
 | **Three.js** (0.186.1) | MIT | WebGL 3D scene graph & rendering | https://github.com/mrdoob/three.js |
 | **Spark** (@sparkjsdev/spark 2.3.1) | MIT | High-performance Gaussian Splat WebGL2 renderer | https://github.com/sparkjsdev/spark |
@@ -19,6 +19,7 @@ This document registers all third-party software components, libraries, and tool
 | **PyTorch** (2.1.2, cu118) and torchvision (0.16.2) | BSD-3-Clause | Training backend under Nerfstudio | https://github.com/pytorch/pytorch |
 | **NumPy** | BSD-3-Clause | Fast numerical arrays & custom PLY I/O | https://github.com/numpy/numpy |
 | **SciPy** (1.18.1) | BSD-3-Clause | Scientific algorithms & spatial filtering | https://github.com/scipy/scipy |
+| **Numba** (0.68.1) | BSD-2-Clause | Compiles the CPU splat renderer used by the floater filter and the photo-checked fixer | https://github.com/numba/numba |
 | **OpenCV** (opencv-python-headless 4.14.0.94) | Apache-2.0 | Frame validation & Laplacian sharpness | https://github.com/opencv/opencv |
 | **jsonschema** (4.23.0) | MIT | Checks `capture.json`, the manifest and `pois.json` against their schemas | https://github.com/python-jsonschema/jsonschema |
 | **PyYAML** | MIT | Reads the pipeline config files | https://github.com/yaml/pyyaml |
@@ -36,6 +37,10 @@ This document registers all third-party software components, libraries, and tool
 | **Space Grotesk** font (variable 300-700, latin subset, woff2) | SIL OFL 1.1 (`viewer/src/assets/fonts/OFL-SpaceGrotesk.txt`) | Viewer UI typeface, self-hosted and bundled by Vite | https://github.com/floriankarsten/space-grotesk (woff2 via Google Fonts) |
 | **Rye** font (Regular, latin subset, woff2) | SIL OFL 1.1, Reserved Font Name "Rye" (`viewer/src/assets/fonts/OFL-Rye.txt`) | Display face for the loading-screen room name, unmodified | https://github.com/google/fonts/tree/main/ofl/rye (woff2 via Google Fonts) |
 
+### SiftGPU note (COLMAP)
+
+COLMAP built with CUDA can run SIFT on the GPU through SiftGPU, which has a non-commercial licence (University of North Carolina: education, research and non-profit use only). COLMAP's licence notes that such dependencies can change the terms. Our pipeline now asks COLMAP for CPU SIFT (VLFeat, BSD) in every config (`colmap: use_gpu: false`, see `pipeline/stages/s03_poses.py`). The two published rooms were processed before this switch and very likely used GPU SIFT; their camera poses are the only output of that step. Any new run, including the finale, uses CPU SIFT.
+
 ---
 
 ## 2. Hosted Services and Browser Features
@@ -44,14 +49,14 @@ No paid API is used. A cost table is in the README under "Who made this".
 
 | Service | Plan | Role | Terms |
 | :--- | :--- | :--- | :--- |
-| **GitHub Pages** | free | Hosts the static viewer and scene files | https://docs.github.com/en/pages |
+| **GitHub Pages** | free | Static project hosting for the viewer and scene files (no commercial service runs on it) | https://docs.github.com/en/pages |
 | **GitHub REST API** | free, owner's own token | "Save to live" in tag mode (owner only) | https://docs.github.com/en/rest |
 | **Cloudflare Workers** | free plan | Multiplayer room relay (`multiplayer/relay/`), stores nothing | https://developers.cloudflare.com/workers/ |
 | **STUN servers** (`stun.cloudflare.com`, `stun.l.google.com`) | free, public | Lets two browsers find each other for voice chat; no audio passes through them | public STUN endpoints |
 | **Web Speech, WebRTC, WebXR, Web Audio** | built into the browser | Voice guide, voice chat, AR guide, footsteps | W3C web standards |
 | **Shields.io** | free | README badges only | https://shields.io |
 
-All avatar models, sounds (generated in the browser with Web Audio), the banner and the K-720 scene are our own work.
+All avatar models, sounds (generated in the browser with Web Audio), the banner and the K-720 and Room 3 scenes are our own work.
 
 ---
 

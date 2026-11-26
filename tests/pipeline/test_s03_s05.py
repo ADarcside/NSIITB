@@ -83,6 +83,17 @@ class TestStage03Poses:
         )
         assert "global_mapper" in cmds_global["mapper"][1]
 
+    def test_colmap_uses_cpu_sift_by_default(self):
+        """GPU SIFT (SiftGPU) has a non-commercial licence, so the default is CPU SIFT."""
+        cmds = build_colmap_commands(database_path="db.db", image_path="imgs", output_path="sparse")
+        fe, m = cmds["feature_extractor"], cmds["matcher"]
+        assert fe[fe.index("--FeatureExtraction.use_gpu") + 1] == "0"
+        assert m[m.index("--FeatureMatching.use_gpu") + 1] == "0"
+        old = build_colmap_commands(database_path="db.db", image_path="imgs", output_path="sparse",
+                                    matcher="sequential", gpu_option_prefixes=("SiftExtraction", "SiftMatching"))
+        assert "--SiftExtraction.use_gpu" in old["feature_extractor"]
+        assert "--SiftMatching.use_gpu" in old["matcher"]
+
     def test_colmap_text_parsers_with_handmade_fixtures(self, temp_dir):
         # 1. Create cameras.txt
         cam_file = temp_dir / "cameras.txt"
@@ -225,6 +236,31 @@ class TestStage03Poses:
         assert out["gate_g3"]["largest_component_ratio"] == 0.9
         assert out["gate_g3"]["discarded_frames"] == 1
         assert (temp_dir / "out" / "poses.json").is_file()
+
+    def test_run_s03_poses_reuse_existing_skips_colmap(self, temp_dir, monkeypatch):
+        import pipeline.stages.s03_poses as s03
+        s0 = temp_dir / "sparse" / "0"
+        s0.mkdir(parents=True)
+        (s0 / "cameras.txt").write_text("1 SIMPLE_RADIAL 1920 1080 1200 960 540 0.01\n")
+        (s0 / "images.txt").write_text("".join(
+            f"{i} 1.0 0.0 0.0 0.0 0.0 0.0 0.0 1 frame_{i:03d}.jpg\n10 10 1\n" for i in range(1, 10)))
+        (s0 / "points3D.txt").write_text("1 0 0 1 255 255 255 0.5 1 0 2 0\n")
+        cfg = temp_dir / "cfg.yaml"
+        cfg.write_text("colmap:\n  reuse_existing: true\n  min_registered_ratio: 0.85\n")
+        img_dir = temp_dir / "frames"
+        img_dir.mkdir()
+        monkeypatch.setattr(s03.shutil, "which", lambda name: "/usr/bin/colmap")
+        def boom(*a, **k):
+            raise AssertionError("COLMAP must not run when reuse_existing is set")
+        monkeypatch.setattr(s03, "execute_colmap", boom)
+        out = run_s03_poses(
+            sparse_dir=temp_dir / "sparse",
+            total_input_images=10,
+            output_dir=temp_dir / "out",
+            config_path=cfg,
+            image_dir=img_dir,
+        )
+        assert out["gate_g3"]["passed"] is True
 
 
 class TestStage04Train:

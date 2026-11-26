@@ -53,10 +53,13 @@ def extract_candidate_frames(
     video_path: Union[str, Path],
     extract_dir: Union[str, Path],
     candidate_fps: float = 4.0,
+    max_width: Optional[int] = None,
 ) -> List[Path]:
     """
     Extracts frames from video using ffmpeg at candidate_fps.
     Verified flags: -y, -i, -vf fps=<candidate_fps>, -q:v 2.
+    max_width: also scale candidates down to this width (never up) while extracting. A 4K video then
+    needs about a quarter of the temporary disk (Room 3: ~16 GB -> ~4 GB at 1920 px).
     """
     video = Path(video_path)
     out_dir = Path(extract_dir)
@@ -76,7 +79,7 @@ def extract_candidate_frames(
         "-i",
         str(video),
         "-vf",
-        f"fps={candidate_fps}",
+        f"fps={candidate_fps}" + (f",scale='min(iw,{int(max_width)})':-2:flags=area" if max_width else ""),
         "-q:v",
         "2",
         pattern,
@@ -95,6 +98,48 @@ def extract_candidate_frames(
     done_marker.write_text(str(len(candidates)))
 
     return candidates
+
+
+def parse_clock(text: str) -> float:
+    """'50:22', '1:02:03' or '83.5' -> seconds."""
+    parts = [float(p) for p in str(text).strip().split(":")]
+    sec = 0.0
+    for p in parts:
+        sec = sec * 60 + p
+    return sec
+
+
+def parse_skip_ranges(raw: Any) -> List[Tuple[float, float]]:
+    """frames.skip_ranges: ["33:41-33:49", "50:22-50:29"] -> [(2021, 2029), (3022, 3029)] in seconds."""
+    out: List[Tuple[float, float]] = []
+    for item in raw or []:
+        if isinstance(item, (list, tuple)) and len(item) == 2:
+            a, b = item
+        else:
+            a, sep, b = str(item).partition("-")
+            if not sep:
+                raise ValueError(f"frames.skip_ranges entry '{item}' must look like '33:41-33:49'")
+        lo, hi = parse_clock(a), parse_clock(b)
+        if hi < lo:
+            raise ValueError(f"frames.skip_ranges entry '{item}' ends before it starts")
+        out.append((lo, hi))
+    return out
+
+
+def drop_skipped(candidate_paths: List[Path], candidate_fps: float,
+                 ranges: List[Tuple[float, float]]) -> Tuple[List[Path], int]:
+    """Drops candidates whose video time falls in a skip range (one frame of margin each side).
+    ffmpeg's fps filter writes cand_000001 at t=0, cand_000002 at 1/fps, and so on."""
+    if not ranges:
+        return candidate_paths, 0
+    pad = 1.0 / candidate_fps
+    kept = []
+    for i, p in enumerate(candidate_paths):
+        t = i / candidate_fps
+        if any(lo - pad <= t <= hi + pad for lo, hi in ranges):
+            continue
+        kept.append(p)
+    return kept, len(candidate_paths) - len(kept)
 
 
 def filter_frames(
@@ -226,6 +271,11 @@ def run_s02_frames(
     keep_max = int(f_cfg.get("keep_max", 600))
     keep_target_raw = f_cfg.get("keep_target", [200, 400])
     keep_target = (int(keep_target_raw[0]), int(keep_target_raw[1]))
+    skip_ranges = parse_skip_ranges(f_cfg.get("skip_ranges"))  # per-run only (e.g. a hand over the lens)
+    if max_width is None and f_cfg.get("max_width"):
+        max_width = int(f_cfg["max_width"])  # --max-width on the command line wins
+    # Scale candidates while extracting (saves temp disk). Off unless set, so existing configs are unchanged.
+    extract_width = max_width if (f_cfg.get("extract_at_max_width") and max_width) else None
 
     if allow_low_frame_count_for_testing:
         keep_min = 1
@@ -251,7 +301,12 @@ def run_s02_frames(
         video_path=video_p,
         extract_dir=raw_candidates_dir,
         candidate_fps=candidate_fps,
+        max_width=extract_width,
     )
+
+    candidate_paths, skipped = drop_skipped(candidate_paths, candidate_fps, skip_ranges)
+    if skip_ranges:
+        print(f"[s02_frames] Skipped {skipped} candidates inside frames.skip_ranges {f_cfg.get('skip_ranges')}")
 
     # 2. Filter frames
     frame_records, kept_paths = filter_frames(
@@ -305,7 +360,10 @@ def run_s02_frames(
 
     metrics = {
         "candidate_fps": candidate_fps,
+        "candidate_width": extract_width,
         "total_candidates": total_candidates,
+        "skip_ranges_s": [list(r) for r in skip_ranges],
+        "skipped_candidates": skipped,
         "kept_frames": num_kept,
         "median_sharpness": round(median_sharpness, 2),
         "keep_min": keep_min,

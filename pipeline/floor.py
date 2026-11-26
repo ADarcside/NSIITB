@@ -109,18 +109,25 @@ def backing(scene: fl.Scene, grid: Dict[str, Any], cfg: Dict[str, Any]) -> Tuple
     return p[ok], colour[yi[ok], xi[ok]]
 
 
-def backing_scene(scene: fl.Scene, p: np.ndarray, col: np.ndarray, cfg: Dict[str, Any]) -> fl.Scene:
-    """Original Gaussians followed by the backing sheet (flat, axis aligned)."""
-    s = float(cfg["backing_sigma_m"]); t = float(cfg["backing_thick_m"])
-    sig = np.tile([s, t, s], (len(p), 1))
+def backing_scene(scene: fl.Scene, p: np.ndarray, col: np.ndarray, cfg: Dict[str, Any], axis: int = 1) -> fl.Scene:
+    """Original Gaussians followed by the backing sheet (flat, axis aligned; thin along world axis `axis`)."""
+    sig = np.tile(_sigmas(cfg, axis), (len(p), 1))
     cov = fl.covariances(np.tile([1.0, 0, 0, 0], (len(p), 1)), sig)
     return fl.Scene(np.r_[scene.w, p], np.r_[scene.op, np.full(len(p), float(cfg["backing_opacity"]))],
                     np.r_[scene.sc, sig], np.r_[scene.cov, cov], np.r_[scene.col, col])
 
 
+def _sigmas(cfg: Dict[str, Any], axis: int = 1) -> list:
+    """Disc sizes along world x, y, z: backing_sigma_m in the sheet plane, backing_thick_m along its normal."""
+    sig = [float(cfg["backing_sigma_m"])] * 3
+    sig[axis] = float(cfg["backing_thick_m"])
+    return sig
+
+
 def backing_rows(p: np.ndarray, col: np.ndarray, names: Sequence[str], world_from_splat: np.ndarray,
-                 cfg: Dict[str, Any]) -> np.ndarray:
-    """PLY rows (splat frame) for the backing: position, rotation, log scale, logit opacity, SH DC; f_rest 0."""
+                 cfg: Dict[str, Any], axis: int = 1) -> np.ndarray:
+    """PLY rows (splat frame) for the backing: position, rotation, log scale, logit opacity, SH DC; f_rest 0.
+    axis: world axis the sheet is thin along (1 = horizontal sheet, 0 / 2 = wall sheets)."""
     m = np.asarray(world_from_splat, dtype=np.float64)
     k = float(np.linalg.norm(m[:3, 0]))
     rw = m[:3, :3] / k
@@ -132,8 +139,7 @@ def backing_rows(p: np.ndarray, col: np.ndarray, names: Sequence[str], world_fro
         rows[:, ix[key]] = ps[:, a]
     for a in range(4):
         rows[:, ix[f"rot_{a}"]] = q[a]
-    s = float(cfg["backing_sigma_m"]); t = float(cfg["backing_thick_m"])
-    for a, v in enumerate((s, t, s)):
+    for a, v in enumerate(_sigmas(cfg, axis)):
         rows[:, ix[f"scale_{a}"]] = math.log(v / k)
     o = float(cfg["backing_opacity"])
     rows[:, ix["opacity"]] = math.log(o / (1 - o))
@@ -181,7 +187,7 @@ def floor_backing(scene: fl.Scene, grid: Dict[str, Any], cfg: Optional[Dict[str,
     wallgap = np.minimum.reduce([w[:, 0] - lo[0], hi[0] - w[:, 0], w[:, 2] - lo[2], hi[2] - w[:, 2]])
     cand = (w[:, 1] < -float(cfg["remove_below_m"])) & (wallgap > float(cfg["wall_margin_m"]))
     cand2 = np.r_[cand, np.zeros(nb, bool)]
-    views = fl.viewpoints(grid, float(cfg["view_step_m"]), tuple(cfg["heights_m"]))
+    views = fl.viewpoints(grid, float(cfg["view_step_m"]), fl.room_heights(cfg["heights_m"], room_height_m))
     stats: Dict[str, Any] = {"enabled": True, "gaussians_in": n, "backing": nb,
                              "backing_m2": round(nb * float(cfg["backing_step_m"]) ** 2, 2),
                              "candidates": int(cand.sum()), "views": len(views)}
@@ -250,15 +256,16 @@ def write_lite(full_ply: Path, data: np.ndarray, keep: np.ndarray, p: np.ndarray
 
 
 def lite_backing_rows(p: np.ndarray, col: np.ndarray, names: Sequence[str], world_from_splat: np.ndarray,
-                      cfg: Dict[str, Any]) -> np.ndarray:
+                      cfg: Dict[str, Any], axis: int = 1) -> np.ndarray:
     """The backing for Lite: every other point each way, twice as wide, so it stays closed at a quarter the count."""
     if not len(p):
         return np.zeros((0, len(names)), dtype="<f4")
     step = 2 * float(cfg["backing_step_m"])
-    cell = np.floor((p[:, [0, 2]] - p[:, [0, 2]].min(0)) / step + 1e-6).astype(np.int64)
+    plane = [a for a in range(3) if a != axis]
+    cell = np.floor((p[:, plane] - p[:, plane].min(0)) / step + 1e-6).astype(np.int64)
     _, first = np.unique(cell, axis=0, return_index=True)
     coarse = {**cfg, "backing_step_m": step, "backing_sigma_m": 2 * float(cfg["backing_sigma_m"])}
-    return backing_rows(p[first], col[first], names, world_from_splat, coarse)
+    return backing_rows(p[first], col[first], names, world_from_splat, coarse, axis)
 
 
 def ply_names(ply: Path) -> list:

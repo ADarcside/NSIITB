@@ -66,6 +66,16 @@ DEFAULTS: Dict[str, Any] = {
     "max_hole_pct": 0.05,         # verify gate per view: alpha before > 0.97 and after < 0.9
     "max_changed_pct": 5.0,       # verify gate per view: colour change > 0.1
     "refine": True,               # second look at put-backs that are hidden behind other put-backs
+    "unsupported": False,         # stage B: small solid clusters floating at eye level with no floor/wall/ceiling support
+                                  # (off by default until tried on K-720; on in the Room 3 configs)
+    "unsupported_bottom_m": 0.6,  # cluster must start above this (stool and chair seats on thin legs stay)
+    "unsupported_floor_m": 0.3,   # touching the layers below this counts as standing on the floor
+    "unsupported_top_m": 2.0,     # only clusters whose top is below this and 0.8 x room height (fans and lights hang higher)
+    "unsupported_max_m3": 0.02,   # and no bigger than this (a 30 cm blob); bigger floating things are left alone
+    "unsupported_max_clusters": 20,      # more clusters than this, or more than
+    "unsupported_max_fraction": 0.002,   # this share of all splats: something is off, keep everything
+    "local_repair_rounds": 4,     # verify fails in a few views: put back only the removals seen in those views, re-verify
+    "local_repair_px": 0.05,      # "seen" = shows at least this many pixels' worth in a failing view
     "solid_patch_px": 0,          # 0 = off. Guard: keep candidates that alone cover a solid patch
     "prune_unseen": False,        # remove Gaussians no view sees (not floater removal; keep off)
     "workers": 0,                 # 0 = all cores
@@ -73,7 +83,7 @@ DEFAULTS: Dict[str, Any] = {
 
 # Each stage is scored with the earlier stages' results fixed. Structure first: when walls are still out
 # for scoring, faint or foggy splats in front of them look like they fill a hole and get put back.
-STAGES = (("A", ("outside", "oversize")), ("A2", ("faint",)), ("B", ("walk_fog", "free_air")))
+STAGES = (("A", ("outside", "oversize")), ("A2", ("faint",)), ("B", ("walk_fog", "free_air", "unsupported")))
 STAGE_B = STAGES[-1][1]
 FACES = ((1, 0, 0), (-1, 0, 0), (0, 0, 1), (0, 0, -1), (0, 1, 0), (0, -1, 0))
 
@@ -324,6 +334,25 @@ def viewpoints(grid: Dict[str, Any], step_m: float = 0.6, heights: Sequence[floa
     return [((x, hh, z), (x + f[0], hh + f[1], z + f[2])) for x, z in pts for hh in heights for f in FACES]
 
 
+def room_heights(heights: Sequence[float], room_height_m: Optional[float], ceiling_gap_m: float = 0.2,
+                 tall_room_m: float = 3.2) -> Tuple[float, ...]:
+    """Viewpoint heights for this room. Heights within ceiling_gap_m of the ceiling come down below it (a low room);
+    a room taller than tall_room_m gets one more view at 85% of its height (a hall). A room between the two keeps
+    the configured heights exactly, so K-720 (2.6 m) and similar rooms see the same views as before."""
+    hs = [float(h) for h in heights]
+    if room_height_m is None or not np.isfinite(room_height_m) or room_height_m <= 0:
+        return tuple(hs)
+    top = room_height_m - ceiling_gap_m
+    hs = [min(h, top) if h > top else h for h in hs]
+    if room_height_m > tall_room_m:
+        hs.append(round(0.85 * room_height_m, 2))
+    out: List[float] = []
+    for h in hs:
+        if h > 0.1 and all(abs(h - o) > 0.05 for o in out):
+            out.append(round(h, 3))
+    return tuple(out)
+
+
 def room_box(grid: Dict[str, Any], room_height_m: float) -> Tuple[np.ndarray, np.ndarray]:
     c = float(grid["cell_m"]); ox, oz = grid["origin"]
     lo = np.array([ox, 0.0, oz])
@@ -371,9 +400,65 @@ def rule_masks(scene: Scene, grid: Dict[str, Any], room_height_m: float, cfg: Di
         wallgap = np.minimum.reduce([w[:, 0] - lo[0], hi[0] - w[:, 0], w[:, 2] - lo[2], hi[2] - w[:, 2]])
         rules["free_air"] = ((dist > float(cfg["free_air_dist_m"])) & (wallgap > float(cfg["free_air_wall_m"]))
                              & (y > fy0) & (y < room_height_m - float(cfg["free_air_ceiling_m"])))
+        rules["unsupported"] = np.zeros(len(w), bool)
+        cells = unsupported_cells(occ, lay, grid, room_height_m, cfg)
+        if cells.any():
+            rules["unsupported"][inxz] = cells[li[inxz], row[inxz], col[inxz]]
+            rules["unsupported"] &= (y > float(lay["y0_m"]))
+            lab, nc = ndi.label(cells, structure=ndi.generate_binary_structure(3, 2))
+            u = rules["unsupported"]
+            report = []
+            for k in range(1, nc + 1):
+                zz_, rr_, cc_ = np.nonzero(lab == k)
+                report.append({"x": round(ox + (cc_.mean() + 0.5) * c, 2), "z": round(oz + (rr_.mean() + 0.5) * c, 2),
+                               "y_m": [round(float(lay["y0_m"]) + zz_.min() * float(lay["dy_m"]), 2),
+                                       round(float(lay["y0_m"]) + (zz_.max() + 1) * float(lay["dy_m"]), 2)],
+                               "m3": round(len(zz_) * float(lay["dy_m"]) * c * c, 4)})
+            capped = nc > int(cfg["unsupported_max_clusters"]) or u.sum() > float(cfg["unsupported_max_fraction"]) * len(w)
+            if capped:
+                rules["unsupported"] = np.zeros(len(w), bool)
+            rules["_unsupported_report"] = {"clusters": report, "splats": int(u.sum()), "capped": bool(capped)}
     else:
         rules["free_air"] = np.zeros(len(w), bool)
+        rules["unsupported"] = np.zeros(len(w), bool)
     return rules
+
+
+def unsupported_cells(occ: np.ndarray, lay: Dict[str, Any], grid: Dict[str, Any], room_height_m: float,
+                      cfg: Dict[str, Any]) -> np.ndarray:
+    """Occupied layer cells forming a small solid cluster that floats: it touches no floor, wall or ceiling
+    and nothing connects it to them (furniture stands on the floor, shelves and hooks join a wall, lamps and
+    fans hang from the ceiling). Only clusters whose top is below unsupported_top_m (eye level, where they
+    block the walk; fans and lights higher up are left alone) and up to unsupported_max_m3 are returned."""
+    from scipy import ndimage as ndi
+    if not cfg.get("unsupported", True) or occ is None or not occ.any():
+        return np.zeros_like(occ, dtype=bool)
+    dy, y0, c = float(lay["dy_m"]), float(lay["y0_m"]), float(grid["cell_m"])
+    lab, n = ndi.label(occ, structure=ndi.generate_binary_structure(3, 2))
+    if n == 0:
+        return np.zeros_like(occ, dtype=bool)
+    L = occ.shape[0]
+    support = np.zeros(n + 1, bool)
+    floor_l = max(1, int(np.ceil((float(cfg["unsupported_floor_m"]) - y0) / dy)))
+    support[np.unique(lab[:floor_l])] = True
+    top_l = int(np.floor((room_height_m - float(cfg["free_air_ceiling_m"]) - 0.2 - y0) / dy))
+    if 0 <= top_l < L:
+        support[np.unique(lab[top_l:])] = True
+    # the grid stops agent_radius short of the walls: anything within that + 0.15 m of its edge is against a wall
+    e = max(2, int(np.ceil((float(grid.get("agent_radius_m", 0.25)) + 0.15) / c)))
+    for sl in (np.s_[:, :e, :], np.s_[:, -e:, :], np.s_[:, :, :e], np.s_[:, :, -e:]):
+        support[np.unique(lab[sl])] = True
+    support[0] = True
+    idx = np.arange(n + 1)
+    zz = np.indices(occ.shape)[0]
+    top = np.asarray(ndi.maximum(zz, lab, idx))
+    bot = np.asarray(ndi.minimum(zz, lab, idx))
+    size = np.bincount(lab.ravel(), minlength=n + 1)
+    max_cells = float(cfg["unsupported_max_m3"]) / (dy * c * c)
+    top_m = min(float(cfg["unsupported_top_m"]), 0.8 * room_height_m)
+    ok = ((~support) & (size <= max_cells) & ((y0 + (top + 1) * dy) <= top_m)
+          & ((y0 + bot * dy) >= float(cfg["unsupported_bottom_m"])))
+    return ok[lab]
 
 
 # ---------------------------------------------------------------------------------- parallel views
@@ -533,14 +618,18 @@ def filter_floaters(scene: Scene, grid: Dict[str, Any], cfg: Optional[Dict[str, 
         h_src = "99th percentile of opaque Gaussians"
     else:
         h_src = "given"
+    cfg = {**cfg, "heights_m": list(room_heights(cfg["heights_m"], room_height_m))}
     views = viewpoints(grid, float(cfg["view_step_m"]), tuple(cfg["heights_m"]))
     px = int(cfg["render_px"])
     put_back = float(cfg["put_back_px"])
     rules = rule_masks(scene, grid, room_height_m, cfg)
+    uns_report = rules.pop("_unsupported_report", None)
     stats: Dict[str, Any] = {
         "enabled": True, "gaussians_in": n, "room_height_m": round(room_height_m, 3), "room_height_source": h_src,
         "floor_spots": len(views) // (6 * len(cfg["heights_m"])), "eye_positions": len(views) // 6, "views": len(views), "render_px": px, "rules": {},
     }
+    if uns_report:
+        stats["unsupported_clusters"] = uns_report
     log(f"[floaters] {n} Gaussians, {len(views)} views ({len(views) // (6 * len(cfg['heights_m']))} floor spots x {len(cfg['heights_m'])} heights x 6 directions), room height {room_height_m:.2f} m")
 
     with Views(scene, views, px, int(cfg["workers"])) as vw:
@@ -601,10 +690,47 @@ def filter_floaters(scene: Scene, grid: Dict[str, Any], cfg: Optional[Dict[str, 
             after = vw.map(_render_view, [(v, ~rem_mask) for v in vw.views])
             return compare(before, after, float(cfg["max_hole_pct"]), float(cfg["max_changed_pct"]))
 
+        # Floating solid clusters change a close view a lot by design (they are what blocks the view), so they
+        # are held out of the change gate and checked for holes only, after everything else has passed.
+        uns = removed_by.get("unsupported", np.zeros(n, bool)) & removed
+        removed &= ~uns
         ts = time.time()
         gate = verify(removed)
         stats["verify_s"] = round(time.time() - ts, 1)
         retried: List[str] = []
+        local_rounds: List[Dict[str, Any]] = []
+        # Some views fail: put back only removals that show in those views (seen in the original scene from
+        # there), biggest first (a cloud right in front of the camera, not the faint dust around it), keep every
+        # other removal, and verify all views again. Thresholds step down to local_repair_px.
+        floor_px = float(cfg["local_repair_px"])
+        steps = [t for t in (4.0, 1.0, 0.25) if t > floor_px][: max(0, int(cfg["local_repair_rounds"]) - 1)] + [floor_px]
+        for thr in steps[: int(cfg["local_repair_rounds"])]:
+            if gate["passed"] or not removed.any():
+                break
+            bad = [vw.views[i] for i in gate["views_failing"]]
+            ridx = np.flatnonzero(removed)
+            back = np.zeros(n, bool)
+            for i, v in vw.map(_visible_view, [(view, None, ridx) for view in bad]):
+                back[i[v > thr]] = True
+            if not back.any():
+                continue
+            for k in removed_by:
+                m = removed_by[k] & removed & back
+                if k in stats["rules"] and m.any():
+                    r = stats["rules"][k]
+                    r["put_back_local"] = r.get("put_back_local", 0) + int(m.sum())
+                    r["put_back"] = r.get("put_back", 0) + int(m.sum())
+            removed &= ~back
+            local_rounds.append({"views_failing": len(bad), "min_px": thr, "put_back": int(back.sum()),
+                                 "changed_pct_max": gate["changed_pct_max"], "hole_pct_max": gate["hole_pct_max"]})
+            log(f"[floaters] verify failed in {len(bad)} view(s) (hole {gate['hole_pct_max']}%, changed "
+                f"{gate['changed_pct_max']}%): put back {int(back.sum())} removals seen there, verifying again")
+            gate = verify(removed)
+        if local_rounds:
+            stats["verify_local_repair"] = local_rounds
+            for k in removed_by:
+                if k in stats["rules"]:
+                    stats["rules"][k]["removed"] = int((removed_by[k] & removed).sum())
         if not gate["passed"]:
             # Put back every rule whose removals still fill a hole in the final scene, then verify once more
             resid = hole_fill_score(vw, ~removed, removed)
@@ -628,6 +754,28 @@ def filter_floaters(scene: Scene, grid: Dict[str, Any], cfg: Optional[Dict[str, 
                 f"put back rules {retried}, verifying again")
             stats["verify_first"] = {k: v for k, v in gate.items() if not k.startswith("per_view")}
             gate = verify(removed)
+
+        if uns.any() and gate["passed"]:
+            after = vw.map(_render_view, [(v, ~(removed | uns)) for v in vw.views])
+            ug = compare(before, after, float(cfg["max_hole_pct"]), 1e9)
+            ok_u = ug["hole_pct_max"] <= float(cfg["max_hole_pct"])
+            stats["unsupported_check"] = {"removed": int(uns.sum()) if ok_u else 0, "hole_pct_max": ug["hole_pct_max"],
+                                          "changed_pct_max": ug["changed_pct_max"], "passed": bool(ok_u)}
+            if ok_u:
+                removed |= uns
+            if "unsupported" in stats["rules"]:
+                r = stats["rules"]["unsupported"]
+                if ok_u:
+                    r["removed"] = int(uns.sum())
+                else:
+                    r["put_back"] = r.get("put_back", 0) + int(uns.sum())
+                    r["removed"] = 0
+            log(f"[floaters] floating clusters: {int(uns.sum())} Gaussians, hole max {ug['hole_pct_max']}% -> "
+                f"{'removed' if ok_u else 'kept'}")
+        elif uns.any() and "unsupported" in stats["rules"]:
+            r = stats["rules"]["unsupported"]
+            r["put_back"] = r.get("put_back", 0) + int(uns.sum())
+            r["removed"] = 0
 
     stats["verify"] = gate
     stats["verify_retried_rules"] = retried

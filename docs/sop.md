@@ -10,7 +10,7 @@ The goal is **one continuous video of one still, well-lit room**, plus **three t
 |---|---|
 | Time on site | finale plan: about 35 min (3 walk-through, 7 setup, 15 to 20 filming, 5 checks); full plan: about 45 min |
 | People | 1 operator (a second person helps keep the room clear and measures) |
-| Kit | phone with at least 25 GB free and a full battery, tape measure (5 m or longer) or laser meter, masking tape and a marker, a few matte objects or sticky notes for plain walls, this SOP and the [field checklist](field-checklist.md) |
+| Kit | phone with at least 25 GB free and a full battery, tape measure (5 m or longer) or laser meter, masking tape and a marker, printed ArUco marker sheet, a few matte objects or sticky notes for plain walls, this SOP and the [field checklist](field-checklist.md) |
 | Output | `room.mov` (original file, not converted) and `capture.json` |
 
 Version history is at the bottom.
@@ -30,6 +30,8 @@ Version history is at the bottom.
    - C to D exactly **1.000 m** apart, roughly at right angles to A–B.
 
    Label the crosses A, B, C, D with a marker and take one photo of the tape measure along each pair. Also tape and write down two more distances as checks: **door to the far wall**, and **one large piece of furniture** (for example a table's length). The pipeline currently takes scale from the room measurements (step 4.3), and the tape pairs are the fallback and a cross-check.
+
+   **Best: put a printed ArUco marker on each cross** (`python -m pipeline.tools.marks sheet --out marker_sheet`, print one per A4 page at 100%, marker centre on the cross, flat and still). After S03, `python -m pipeline.tools.marks aruco --run-dir runs/<run>` finds them in the frames and writes `marks_2d.json` with no clicking. With plain crosses, read each cross centre's pixel in 2+ frames in any image viewer and add it with `python -m pipeline.tools.marks add --run-dir runs/<run> --label A --frame frame_000123.jpg --u 812 --v 640`. Then `python -m pipeline.tools.marks check --run-dir runs/<run> --capture capture.json` measures both pairs in the model, and S06 uses them. Because A–B runs along the room and C–D across it, a model stretched along one axis shows up as a C–D error (room 2 was 1.8x too long and nothing measured it).
 8. **Phone settings.**
    - Charge to 100 % (or carry a power bank), free at least 25 GB, turn on Do Not Disturb.
    - iPhone: Camera > Video, **4K, 30 fps**, 1x lens, no zoom. Action mode, Cinematic and Night mode off. Settings > Camera > Formats: "Most Compatible" is fine. Settings > Camera > Record Video: **HDR Video off**, so brightness stays steady. Use the stock Camera app.
@@ -50,9 +52,9 @@ Do not stop and restart the recording. Pausing is fine; cutting is not. A 20 min
 
 Phone height names used below: **high** = arms up above your head, about 1.9 m; **chest** = about 1.3 m; **waist** = about 0.9 m; **low** = crouching, about 0.5 m.
 
-### 2.2 Full plan (practice rooms): hostel room K-720 (6.4 × 3.9 m, bunks), 30 to 35 min
+### 2.2 Full plan (practice rooms): hostel room K-720 (6.21 × 3.93 m, bunks), 30 to 35 min
 
-Do the passes in this order. "Lap" means once round the whole room (about 20 m, about 2 min at this speed). K-720 is narrow, so "far side" shots are taken **along the length** of the room (6.4 m), and side walls are filmed from across the aisle.
+Do the passes in this order. "Lap" means once round the whole room (about 20 m, about 2 min at this speed). K-720 is narrow, so "far side" shots are taken **along the length** of the room (6.21 m), and side walls are filmed from across the aisle.
 
 | # | Part | Distance from the subject | Passes | How to film it | About |
 |---|---|---|---|---|---|
@@ -60,7 +62,7 @@ Do the passes in this order. "Lap" means once round the whole room (about 20 m, 
 | 2 | **Whole room, end to end** | 4 to 6 m to the far end wall | **4 lengths each way** (8 total) | Walk the aisle from the door end to the far end and back, facing the end wall you are walking toward, then turn round at the end slowly. Heights: chest level, chest tilted up 30°, waist tilted down 30°, high tilted down 20°. | 5 min |
 | 3 | **Side walls and bunks from across the aisle** | as far back as the room allows (1.5 to 2.5 m or more) | **4 laps** | Back against one side, face the opposite wall, crab-walk the full length; then swap sides. Lap 1: chest level. Lap 2: high, tilted up 30° (wall tops, upper bunk, ceiling edge). Lap 3: waist, tilted down 40° (floor-wall line, lower bunk). Lap 4: low (0.5 m), level (under bunks, bed fronts). | 8 min |
 | 4 | **Corners** (all 4) | 1.5 m back, on the diagonal | **4 sweeps** per corner | Two small sideways steps while sweeping wall, corner, wall (about 90°): level, up 30°, down 30°, then low and level. | 4 min |
-| 5 | **Ceiling** | about 1.0 m (phone high, ceiling 2.84 m) | **3 lines** | Walk the aisle with the phone held high: once pointed **straight up**, once tilted 45° toward the left wall top, once 45° toward the right wall top. Include lights, fans and the area above the upper bunks. | 2.5 min |
+| 5 | **Ceiling** | about 1.0 m (phone high, ceiling 2.82 m) | **3 lines** | Walk the aisle with the phone held high: once pointed **straight up**, once tilted 45° toward the left wall top, once 45° toward the right wall top. Include lights, fans and the area above the upper bunks. | 2.5 min |
 | 6 | **Floor** | about 1 m ahead | **2 lines** | Waist height, phone aimed at the floor **about 1 m ahead, not straight down**, so your feet, shoes and shadow stay out of frame. Walk along the aisle and back on the other half. Keep the main light behind the phone, not behind you. | 1.5 min |
 | 7 | **Lower bunk and bunk frame** (each bunk) | 1.0 to 1.5 m | **3 heights + inside** | Slow side-to-side arc in front of each bunk: chest level, then low looking up at the underside of the top bunk. Then a slow slide along the lower bunk at 0.7 to 1.0 m, phone pointed in (this also covers the top bunk's underside). | 3 min |
 | 7b | **Top bunk** (each one) | 1.0 to 1.5 m from the aisle | **3 passes + 2 end arcs** | Stand in the aisle and hold the phone **as high as you can reach**, arms straight up. Walk the full length of the bunk three times: once level with the mattress edge, then twice tilted **down about 30°** onto the mattress surface (once nearer, once a step farther back). Then at each end of the bunk, a short arc of about 60° around the corner, one step per 15°. The top-bunk view from 2.5 m or more across the room comes from the high, tilted-up lap of pass 3. Optional: stand 2 or 3 rungs up the ladder for one extra pass. **Never stand on the bunks.** | 2.5 min per bunk |
@@ -95,7 +97,7 @@ For the live finale, any unseen venue, or a quick re-capture. Same rules, but wa
 | 13 | **End at the door** | on mark A, then the doorway | 1 | Repeat the start pan, walk back to the doorway, hold still 3 s | 45 s |
 | | **Total** | | | | **15 to 20 min** |
 
-If a pass goes wrong (feet in shot, thumb over the lens, someone walks in), say "skip" and the time out loud, keep the recording going, and redo the pass. Write the times down so that area can be checked in the model.
+If a pass goes wrong (feet in shot, thumb over the lens, someone walks in), say "skip" and the time out loud, keep the recording going, and redo the pass. Write the times down: they go in `frames.skip_ranges` in the run config so those seconds are left out.
 
 ### 2.4 Throughout the video
 
@@ -106,7 +108,7 @@ If a pass goes wrong (feet in shot, thumb over the lens, someone walks in), say 
 - **Keep yourself out of shot.** Your feet, shoes and shadow move with you and turn into dark see-through blobs just above the floor. Never point the phone straight down at your feet, and keep the main light behind the phone.
 - **Close windows** before filming so curtains and loose fabric stay still.
 - In a long shoot, rest your arms between passes **by pausing, not by lowering the phone fast or stopping the recording**. Hold still for a few seconds, then carry on.
-- If something moves (a person walks in, a curtain swings) or your feet or thumb get in shot, say the time out loud on the video or note it, and film that area again before you finish.
+- If something moves (a person walks in, a curtain swings) or your feet or thumb get in shot, say the time out loud on the video or note it, and film that area again before you finish. Those times become `frames.skip_ranges` in the run config (Room 3 skipped two such windows).
 - **For moving furniture later:** film the floor and the wall behind each piece that may be moved (around and between legs, and the wall strip just above it) from at least two angles. The viewer fills a moved piece's old spot from the floor and wall around it, so those must be in the scan. After publishing, open tag mode, then Layout, then Fix boxes, and check each furniture box (about 5 min).
 - The room config takes 2 candidate frames per second (about 2,400 from 20 min, 4,200 from 35 min), drops blurry ones and keeps 1,200 to 1,400 spread over the whole video. Slower walking means more of those frames are sharp.
 
@@ -158,7 +160,7 @@ Copy `tests/fixtures/capture_valid.json` and edit it. Every field below is check
     {"a": "A", "b": "B", "distance_m": 2.0, "role": "scale"},
     {"a": "C", "b": "D", "distance_m": 1.0, "role": "check"}
   ],
-  "room_dims_m": {"width": 3.93, "length": 6.39, "height": 2.84},
+  "room_dims_m": {"width": 3.93, "length": 6.21, "height": 2.82},
   "consent": {"granted": true, "reference": "k720-own-room-2026-10-25"},
   "notes": "Round 1 room capture, tape pairs A-B 2 m, C-D 1 m"
 }
@@ -184,11 +186,11 @@ Every stage has a measured pass/fail gate. A failed gate means reshoot or reproc
 | Gate | Stage | Passes when | If it fails |
 |---|---|---|---|
 | G1 | S01 validate | video at least 90 s and at least 1080p, valid `capture.json` | fix `capture.json`, or film a longer video |
-| G2 | S02 frames | 150 or more sharp frames kept (room config targets 1,000–1,200) | reshoot slower, in brighter light |
-| G3 | S03 camera poses (COLMAP) | 95 % or more of frames registered, mean reprojection error 1.0 px or less, one main model; **plus a human look at the sparse cloud** | reshoot the weak area; try `colmap.mapper: incremental` |
+| G2 | S02 frames | 150 or more sharp frames kept (room config targets 1,200–1,400) | reshoot slower, in brighter light |
+| G3 | S03 camera poses (COLMAP) | 95 % or more of frames registered, mean reprojection error 1.0 px or less, one main model; **plus a human look at the sparse cloud** | reshoot the weak area; try `colmap.mapper: incremental`. S03 also drops cameras COLMAP placed far from the walk; if it stops with "far from the walk" (over 10 %) on a genuinely large venue with one long walk, set `colmap.far_camera_gate: warn` in a config copy and say so |
 | G4 | S04 training | PSNR 24 dB or more (warning only); **plus a human look at the renders** | retrain with more frames or iterations |
 | G5 | S05 export | valid splat PLY | re-export |
-| G6 | S06 normalize | floor flat to 3 cm or less, scale check within 2 %; **plus a human look at the top and side views and `navgrid.png`** | recheck room measurements, adjust crop |
+| G6 | S06 normalize | floor flat to 3 cm or less, scale check within 2 %, room length/width/ceiling agree within 5 %, the walked camera path fits inside the taped room; **plus a human look at the top and side views and `navgrid.png`** | recheck room measurements; if the sizes disagree or the path is too long the model is stretched: re-film with sideways passes and wide end-to-end shots (or set `room_dims_gate`/`path_gate: warn` in a config copy and say so) |
 | G7 | S07 compress | full SPZ under 100 MB, lite under 30 MB | lower the Gaussian count |
 | G8 | S08 manifest | manifest validates against the schema | fix the manifest writer |
 
@@ -212,8 +214,8 @@ Every stage has a measured pass/fail gate. A failed gate means reshoot or reproc
 - Cropping the splat at the walls opened black holes, because splat walls are partly see-through. The room config now keeps every Gaussian, and the viewer's room bounds and walkable grid keep visitors inside instead.
 
 - Reshoot (room_v2, 28 Oct): floor passes aimed straight down caught the operator's feet and shadow, which became dark blobs above the floor. The ceiling corner above the cupboards by the door, the shiny AC vent and the curtain stayed soft. v1.3 aims floor passes 1 m ahead and adds a trouble-spot pass.
-- Room 2 (narrow sharing room, 17 Nov, dropped): the model came out 1.3 to 2x too long along the room while width and height were right. Nearly every view looked along the walking line in a narrow room with plain walls, and nothing tied the two ends together. The run passed on a warning. v1.8 adds sideways passes, wide shots from both ends and texture on plain walls to the finale plan. Its darkest pass also lost frames (darkness, not blur). Lesson: number gates are not enough, always look at the model in the viewer.
-- Room 3 (19 Nov, 51 min): the backlit mesh window and shiny dark surfaces turned into haze, and brightness changed during the long walk. Two short windows had feet in shot and a thumb over the lens, left out of the run. v1.8 adds HDR video off, re-tapping the exposure lock, side-on windows and saying skip times out loud.
+- Room 2 (narrow sharing room, 17 Nov, dropped): the model came out 1.3 to 2x too long along the room while width and height were right. Nearly every view looked along the walking line in a narrow room with plain walls, and nothing tied the two ends together. The run passed on a warning. v1.7 made a size disagreement over 5 % a stop; v1.8 adds sideways passes, wide shots from both ends and texture on plain walls to the finale plan. Its darkest pass also lost frames (darkness, not blur). Lesson: number gates are not enough, always look at the model in the viewer.
+- Room 3 (19 Nov, 51 min): the backlit mesh window and shiny dark surfaces turned into haze, and brightness changed during the long walk. Two short windows had feet in shot and a thumb over the lens, removed with `frames.skip_ranges`. v1.8 adds HDR video off, re-tapping the exposure lock, side-on windows and saying skip times out loud.
 
 ## 10. AR guide at a venue
 
@@ -241,7 +243,8 @@ The AR guide is a bonus on top of the 3D room. Skip this section if there is no 
 
 | Version | Date | Change |
 |---|---|---|
-| v1.8.0 | 26 Nov 2026 | Finale plan (15 to 20 min, any room) replaces the quick plan: start and end at the door, wide shots from both ends, sideways passes along long walls, inward arcs around POIs, slow look-up pass. Walk the venue first; texture on plain walls; door and furniture check distances; HDR video off and re-tap the exposure lock; no long looks out of doors or at backlit windows; say skip times out loud. Frame numbers match the room config (2 per second, 1,200 to 1,400 kept). Lessons from rooms 2 and 3 |
+| v1.8.0 | 26 Nov 2026 | Finale plan (15 to 20 min, any room) replaces the quick plan: start and end at the door, wide shots from both ends, sideways passes along long walls, inward arcs around POIs, slow look-up pass. Walk the venue first; texture on plain walls; door and furniture check distances; HDR video off and re-tap the exposure lock; no long looks out of doors or at backlit windows; say skip times out loud (`frames.skip_ranges`). Frame numbers match the room config (2 per second, 1,200 to 1,400 kept). Lessons from rooms 2 and 3 |
+| v1.7.0 | 18 Nov 2026 | Tape marks without the COLMAP GUI (printed ArUco markers or typed pixels, `pipeline.tools.marks`); G6 now stops on room sizes disagreeing over 5 % and on a camera path longer than the room (lessons from room 2) |
 | v1.6.0 | 16 Nov 2026 | Floor-plan sketch before leaving the room (section 4, step 5); note on several rooms and floors |
 | v1.5.0 | 15 Nov 2026 | New section 10: setting up the AR guide at a venue (marks, build, QR sheet, phone steps) |
 | v1.4.0 | 15 Nov 2026 | Film the floor and wall behind movable furniture; check furniture boxes in tag mode after publishing |

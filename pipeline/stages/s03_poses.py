@@ -36,6 +36,8 @@ def build_colmap_commands(
     matcher: str = "exhaustive",
     use_global_mapper: bool = False,
     sequential_overlap: int = 10,
+    use_gpu: bool = False,
+    gpu_option_prefixes: tuple = ("FeatureExtraction", "FeatureMatching"),
 ) -> Dict[str, List[str]]:
     """
     Builds the complete set of COLMAP CLI commands.
@@ -58,6 +60,8 @@ def build_colmap_commands(
         camera_model,
         "--ImageReader.single_camera",
         "1",
+        f"--{gpu_option_prefixes[0]}.use_gpu",
+        "1" if use_gpu else "0",
     ]
 
     # 2. Matching
@@ -70,6 +74,8 @@ def build_colmap_commands(
             db,
             "--SequentialMatching.overlap",
             str(sequential_overlap),
+            f"--{gpu_option_prefixes[1]}.use_gpu",
+            "1" if use_gpu else "0",
         ]
     else:
         match_cmd = [
@@ -77,6 +83,8 @@ def build_colmap_commands(
             "exhaustive_matcher",
             "--database_path",
             db,
+            f"--{gpu_option_prefixes[1]}.use_gpu",
+            "1" if use_gpu else "0",
         ]
 
     # 3. Mapper (incremental or global retry)
@@ -112,6 +120,19 @@ def build_colmap_commands(
         "mapper": mapper_cmd,
         "model_converter": convert_cmd,
     }
+
+
+def colmap_gpu_option_prefixes(colmap_bin: str = "colmap") -> tuple:
+    """Option names for the use_gpu switch: COLMAP 3.12+ uses FeatureExtraction/FeatureMatching,
+    older builds SiftExtraction/SiftMatching. Read from `colmap feature_extractor -h`."""
+    try:
+        out = subprocess.run([colmap_bin, "feature_extractor", "-h"], capture_output=True, text=True, timeout=60)
+        text = (out.stdout or "") + (out.stderr or "")
+    except Exception:
+        text = ""
+    if "SiftExtraction.use_gpu" in text and "FeatureExtraction.use_gpu" not in text:
+        return ("SiftExtraction", "SiftMatching")
+    return ("FeatureExtraction", "FeatureMatching")
 
 
 def execute_colmap(
@@ -406,14 +427,24 @@ def run_s03_poses(
     camera_model = str(c_cfg.get("camera_model", "SIMPLE_RADIAL"))
     matcher = str(c_cfg.get("matcher", "exhaustive"))
     sequential_overlap = int(c_cfg.get("sequential_overlap", 10))
+    # Licence: COLMAP's GPU SIFT is SiftGPU (non-commercial licence). CPU SIFT (VLFeat, BSD) is the default.
+    use_gpu = bool(c_cfg.get("use_gpu", False))
     # "global" = COLMAP 4.x global_mapper (GLOMAP), much faster than incremental on 400+ frames
     use_global_mapper = str(c_cfg.get("mapper", "incremental")).lower() == "global"
     colmap_timeout_s = int(c_cfg.get("timeout_s", 1800))
+    # Resume: keep an existing finished COLMAP model and only re-evaluate Gate G3 on it
+    reuse_existing = bool(c_cfg.get("reuse_existing", False))
 
     s_dir = Path(sparse_dir)
+    has_model = s_dir.is_dir() and (
+        (s_dir / "images.txt").is_file()
+        or any((d / "images.txt").is_file() for d in s_dir.iterdir() if d.is_dir() and d.name.isdigit())
+    )
+    if reuse_existing and has_model:
+        print(f"[s03_poses] colmap.reuse_existing: keeping the model in {s_dir}, skipping COLMAP")
 
     # Real Executor: If colmap is installed and image_dir is given, run colmap
-    if image_dir and Path(image_dir).is_dir() and shutil.which("colmap"):
+    if image_dir and Path(image_dir).is_dir() and shutil.which("colmap") and not (reuse_existing and has_model):
         # colmap mapper refuses an output_path that does not exist yet
         s_dir.mkdir(parents=True, exist_ok=True)
         db_path = out_dir / "colmap.db"
@@ -425,6 +456,8 @@ def run_s03_poses(
             matcher=matcher,
             sequential_overlap=sequential_overlap,
             use_global_mapper=use_global_mapper,
+            use_gpu=use_gpu,
+            gpu_option_prefixes=colmap_gpu_option_prefixes(),
         )
         ok = execute_colmap(cmds, log_dir=logs, timeout_s=colmap_timeout_s)
         if not ok:
@@ -485,6 +518,32 @@ def run_s03_poses(
             duration_s=elapsed,
             metrics=metrics,
         )
+
+    # Cameras COLMAP placed far from the walk (wild poses) are dropped before training (pipeline/colmap_prune.py).
+    # Gate G3 above is judged on the model as COLMAP made it.
+    if bool(c_cfg.get("drop_far_cameras", True)) and largest.get("dir"):
+        from pipeline.colmap_prune import prune_far_cameras
+        max_far = float(c_cfg.get("max_far_camera_ratio", 0.10))
+        prune = prune_far_cameras(largest["dir"], float(c_cfg.get("far_camera_factor", 3.0)), max_far)
+        metrics["far_cameras"] = prune
+        if prune.get("refused") and str(c_cfg.get("far_camera_gate", "fail")).lower() == "warn":
+            print(f"[s03_poses WARNING] {prune['far_cameras_dropped']} of {prune['cameras_in']} cameras sit far from the walk; "
+                  "far_camera_gate is 'warn': model kept as COLMAP made it, continuing")
+        elif prune.get("refused"):
+            fail_gate(
+                gate="G3",
+                stage="s03_poses",
+                measured=prune,
+                threshold=f"far cameras <= {max_far:.0%} of registered",
+                message=(f"{prune['far_cameras_dropped']} of {prune['cameras_in']} cameras sit far from the walk: the "
+                         f"COLMAP model is unreliable; the model was left untouched"),
+                report_path=report_path,
+                duration_s=time.time() - start_time,
+                metrics=metrics,
+            )
+        if prune["far_cameras_dropped"]:
+            print(f"[s03_poses] dropped {prune['far_cameras_dropped']} of {prune['cameras_in']} cameras placed far from the walk "
+                  f"(> {prune['far_camera_factor']}x the median distance); {prune['points_dropped']} points left with < 2 views removed")
 
     poses_data = {
         "schema_version": 1,
